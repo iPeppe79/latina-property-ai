@@ -1,8 +1,21 @@
 const state = {
   dashboard: null,
+  settings: [],
   selectedPropertyId: null,
-  selectedDemandId: null
+  selectedDemandId: null,
+  showSecrets: false
 };
+
+const FIXED_SETTING_FIELDS = [
+  { provider: 'OpenAI', key: 'openai_api_key', label: 'OpenAI API key', secret: true },
+  { provider: 'OpenAI', key: 'openai_model', label: 'OpenAI model', secret: false },
+  { provider: 'OpenAI', key: 'openai_base_url', label: 'OpenAI base URL', secret: false },
+  { provider: 'OpenAI', key: 'openai_notes', label: 'OpenAI notes', secret: false },
+  { provider: 'Google Maps', key: 'google_maps_api_key', label: 'Google Maps API key', secret: true },
+  { provider: 'Google Maps', key: 'google_geocoding_api_key', label: 'Google Geocoding API key', secret: true },
+  { provider: 'Google Maps', key: 'google_places_api_key', label: 'Google Places API key', secret: true },
+  { provider: 'Google Maps', key: 'google_maps_notes', label: 'Google Maps notes', secret: false }
+];
 
 const el = (id) => document.getElementById(id);
 
@@ -50,19 +63,29 @@ function badgeForVerdict(verdict) {
   return 'pill warn';
 }
 
+function settingKey(provider, key) {
+  return `${provider}::${key}`;
+}
+
+function normalizedSettings(settings) {
+  return new Map(settings.map((item) => [settingKey(item.provider, item.setting_key), item]));
+}
+
 function renderStats(stats) {
   const grid = el('statsGrid');
   grid.innerHTML = [
-    ['Immobili', stats.properties],
-    ['Domande', stats.demands],
-    ['Match', stats.matches],
-    ['Task', stats.tasks],
-    ['Approvals pending', stats.pendingApprovals]
-  ].map(([label, value]) => `
-    <div class="stat">
+    ['Immobili', stats.properties, 'record attivi'],
+    ['Domande', stats.demands, 'richieste cliente'],
+    ['Match', stats.matches, 'abbinamenti calcolati'],
+    ['Task', stats.tasks, 'bozze CRM'],
+    ['Approvals pending', stats.pendingApprovals, 'in attesa'],
+    ['Fonti', stats.sources || 0, 'record verificabili']
+  ].map(([label, value, hint]) => `
+    <article class="stat">
       <div class="label">${label}</div>
       <div class="value">${value || 0}</div>
-    </div>
+      <div class="hint">${hint}</div>
+    </article>
   `).join('');
 }
 
@@ -86,7 +109,7 @@ function renderPropertyList(properties) {
         <span>${property.property_type}</span>
         <span>${money(property.asking_price)}</span>
       </div>
-      <div class="meta" style="margin-top: .45rem">
+      <div class="meta meta--stacked">
         <span class="${badgeForVerdict(property.verdict)}">${property.verdict}</span>
         <span>Score ${Math.round(property.property_score || 0)}</span>
         <span>Match ${Number(property.match_count || 0)}</span>
@@ -103,7 +126,7 @@ function renderDemandList(demands) {
         <span>${prettyList(demand.target_cities)}</span>
         <span>${money(demand.budget_min)} - ${money(demand.budget_max)}</span>
       </div>
-      <div class="meta" style="margin-top: .45rem">
+      <div class="meta meta--stacked">
         <span class="pill">Match ${Number(demand.matched_properties || 0)}</span>
         <span>${demand.urgency}</span>
       </div>
@@ -118,23 +141,37 @@ function renderTasks(tasks) {
     return;
   }
   list.innerHTML = tasks.map((task) => `
-    <div class="task-item">
+    <article class="task-item">
       <div class="task-line">
-        <h4>${task.property_title || 'Task senza immobile'}</h4>
+        <div>
+          <h4>${task.property_title || 'Task senza immobile'}</h4>
+          <div class="meta">
+            <span>${task.channel}</span>
+            <span>${task.status}</span>
+            <span>${task.buyer_name || 'cliente non collegato'}</span>
+          </div>
+        </div>
         <span class="pill ${task.approval_status === 'approved' ? '' : 'warn'}">${task.approval_status}</span>
-      </div>
-      <div class="meta">
-        <span>${task.channel}</span>
-        <span>${task.status}</span>
-        <span>${task.buyer_name || 'cliente non collegato'}</span>
       </div>
       <p class="small">${task.next_action}</p>
       <p class="small">${task.draft_message}</p>
       <div class="hero-actions">
         <button data-approve-task="${task.id}" ${task.approval_status === 'approved' ? 'disabled' : ''}>Approva</button>
       </div>
-    </div>
+    </article>
   `).join('');
+}
+
+function parseMaybeJson(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) return parsed;
+  } catch {
+    // ignore
+  }
+  return [];
 }
 
 function renderPropertyDetail(payload) {
@@ -144,18 +181,11 @@ function renderPropertyDetail(payload) {
     detail.innerHTML = '<div class="empty-state">Scheda non disponibile.</div>';
     return;
   }
-  const criticalities = Array.isArray(property.criticalities)
-    ? property.criticalities
-    : (() => {
-        try {
-          return property.criticalities ? JSON.parse(property.criticalities) : [];
-        } catch {
-          return [];
-        }
-      })();
+  const criticalities = parseMaybeJson(property.criticalities);
   detail.innerHTML = `
     <div class="task-line">
       <div>
+        <div class="section-kicker">Scheda immobile</div>
         <h4>${property.title}</h4>
         <div class="meta">
           <span>${property.address}</span>
@@ -196,30 +226,40 @@ function renderPropertyDetail(payload) {
       </div>
     </div>
 
-    <h4>Domanda collegata</h4>
-    <div class="list" style="max-height: 260px;">
-      ${(matches || []).map((match) => `
-        <div class="list-item">
-          <h4>${match.buyer_name}</h4>
-          <div class="meta">
-            <span>Match ${Math.round(match.match_score)}</span>
-            <span>Coerenza prezzo ${Math.round(match.price_coherence_score)}</span>
-            <span>${match.verdict}</span>
-          </div>
-          <p class="small">${match.rationale}</p>
-        </div>
-      `).join('') || '<div class="empty-state">Nessun match attivo.</div>'}
+    <div class="detail-group">
+      <div class="section-kicker">Domanda collegata</div>
+      <div class="list list--tight">
+        ${(matches || []).map((match) => `
+          <article class="list-item">
+            <h4>${match.buyer_name}</h4>
+            <div class="meta">
+              <span>Match ${Math.round(match.match_score)}</span>
+              <span>Coerenza prezzo ${Math.round(match.price_coherence_score)}</span>
+              <span>${match.verdict}</span>
+            </div>
+            <p class="small">${match.rationale}</p>
+          </article>
+        `).join('') || '<div class="empty-state">Nessun match attivo.</div>'}
+      </div>
     </div>
 
-    <h4>Criticità</h4>
-    <ul>${criticalities.length ? criticalities.map((item) => `<li>${item}</li>`).join('') : '<li>Nessuna criticità principale</li>'}</ul>
+    <div class="detail-group">
+      <div class="section-kicker">Criticità</div>
+      <ul class="compact-list">${criticalities.length ? criticalities.map((item) => `<li>${item}</li>`).join('') : '<li>Nessuna criticità principale</li>'}</ul>
+    </div>
 
-    <h4>Azione consigliata</h4>
-    <p>${property.recommended_action || 'Da verificare'}</p>
+    <div class="detail-group">
+      <div class="section-kicker">Azione consigliata</div>
+      <p>${property.recommended_action || 'Da verificare'}</p>
+    </div>
 
-    <h4>Dati di supporto</h4>
-    <div class="small">Fonti: ${property.source_reference || 'da verificare'} | Links: ${sellerLinks.length} | Note: ${notes.length}</div>
-    ${computed ? `<div class="small">Calcolo aggiornato: score ${computed.propertyScore}, market ${money(computed.marketPricePerMq)}</div>` : ''}
+    <div class="detail-meta">
+      <span>Fonti: ${property.source_reference || 'da verificare'}</span>
+      <span>Links: ${sellerLinks.length}</span>
+      <span>Note: ${notes.length}</span>
+      <span>Task collegati: ${tasks.length}</span>
+    </div>
+    ${computed ? `<div class="small">Calcolo aggiornato: score ${Math.round(computed.propertyScore)}, market ${money(computed.marketPricePerMq)}</div>` : ''}
   `;
 }
 
@@ -233,6 +273,7 @@ function renderDemandDetail(payload) {
   detail.innerHTML = `
     <div class="task-line">
       <div>
+        <div class="section-kicker">Scheda richiesta</div>
         <h4>${demand.buyer_name}</h4>
         <div class="meta">
           <span>${prettyList(demand.target_cities)}</span>
@@ -248,23 +289,27 @@ function renderDemandDetail(payload) {
       <div class="detail-box"><div class="label">Finanziamento</div><strong>${demand.financing_status}</strong></div>
     </div>
 
-    <h4>Match attivi</h4>
-    <div class="list" style="max-height: 260px;">
-      ${(matches || []).map((match) => `
-        <div class="list-item">
-          <h4>${match.title}</h4>
-          <div class="meta">
-            <span>${match.city}</span>
-            <span>${money(match.asking_price)}</span>
-            <span>Match ${Math.round(match.match_score)}</span>
-          </div>
-          <p class="small">${match.rationale}</p>
-        </div>
-      `).join('') || '<div class="empty-state">Nessun match collegato.</div>'}
+    <div class="detail-group">
+      <div class="section-kicker">Match attivi</div>
+      <div class="list list--tight">
+        ${(matches || []).map((match) => `
+          <article class="list-item">
+            <h4>${match.title}</h4>
+            <div class="meta">
+              <span>${match.city}</span>
+              <span>${money(match.asking_price)}</span>
+              <span>Match ${Math.round(match.match_score)}</span>
+            </div>
+            <p class="small">${match.rationale || 'Da verificare'}</p>
+          </article>
+        `).join('') || '<div class="empty-state">Nessun match collegato.</div>'}
+      </div>
     </div>
 
-    <h4>Note</h4>
-    <div class="small">${notes.length ? notes.map((note) => note.note_text).join('<br />') : 'Nessuna nota'}</div>
+    <div class="detail-group">
+      <div class="section-kicker">Note</div>
+      <div class="small">${notes.length ? notes.map((note) => note.note_text).join('<br />') : 'Nessuna nota'}</div>
+    </div>
   `;
 }
 
@@ -276,6 +321,112 @@ function renderForms() {
 
   propertyForm.addEventListener('submit', onPropertySubmit);
   demandForm.addEventListener('submit', onDemandSubmit);
+}
+
+function renderSettingInputs() {
+  const map = normalizedSettings(state.settings);
+
+  FIXED_SETTING_FIELDS.forEach((spec) => {
+    const field = document.querySelector(
+      `[data-setting-provider="${spec.provider}"][data-setting-key="${spec.key}"]`
+    );
+    if (!field) return;
+    const row = map.get(settingKey(spec.provider, spec.key));
+    field.value = row?.value ?? '';
+    field.dataset.secretField = spec.secret ? 'true' : 'false';
+    if (field.tagName === 'INPUT') {
+      field.type = spec.secret && !state.showSecrets ? 'password' : 'text';
+    }
+  });
+
+  const usedKeys = new Set(FIXED_SETTING_FIELDS.map((item) => settingKey(item.provider, item.key)));
+  const customSettings = state.settings.filter((item) => !usedKeys.has(settingKey(item.provider, item.setting_key)));
+  renderCustomSettings(customSettings);
+}
+
+function createCustomRow(data = {}) {
+  const template = el('customSettingRowTemplate');
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = template.innerHTML.trim();
+  const row = wrapper.firstElementChild;
+  row.querySelectorAll('[data-custom-field]').forEach((input) => {
+    const key = input.dataset.customField;
+    input.value = data[key] ?? '';
+    if (key === 'is_secret') {
+      input.value = String(data.is_secret ? 1 : 0);
+    }
+  });
+  row.querySelector('[data-remove-setting-row]').addEventListener('click', () => {
+    row.remove();
+  });
+  return row;
+}
+
+function renderCustomSettings(customSettings) {
+  const list = el('customSettingsList');
+  list.innerHTML = '';
+  if (customSettings.length) {
+    customSettings.forEach((item) => {
+      list.appendChild(createCustomRow({
+        provider: item.provider,
+        setting_key: item.setting_key,
+        setting_label: item.setting_label,
+        value: item.value,
+        is_secret: item.is_secret ? 1 : 0,
+        notes: item.notes
+      }));
+    });
+    return;
+  }
+  list.appendChild(createCustomRow());
+}
+
+async function loadSettings() {
+  const result = await api('/api/settings');
+  state.settings = result.settings || [];
+  renderSettingInputs();
+}
+
+async function saveSettings(event) {
+  event.preventDefault();
+  const settings = [];
+
+  FIXED_SETTING_FIELDS.forEach((spec) => {
+    const field = document.querySelector(
+      `[data-setting-provider="${spec.provider}"][data-setting-key="${spec.key}"]`
+    );
+    if (!field) return;
+    settings.push({
+      provider: spec.provider,
+      setting_key: spec.key,
+      setting_label: spec.label,
+      value: field.value,
+      is_secret: spec.secret ? 1 : 0,
+      notes: ''
+    });
+  });
+
+  const customRows = [...document.querySelectorAll('.custom-setting-row')];
+  customRows.forEach((row) => {
+    const values = Object.fromEntries([...row.querySelectorAll('[data-custom-field]')].map((input) => [input.dataset.customField, input.value]));
+    const hasContent = Object.values(values).some((value) => String(value || '').trim() !== '');
+    if (!hasContent) return;
+    if (!values.provider || !values.setting_key) return;
+    settings.push({
+      provider: values.provider,
+      setting_key: values.setting_key,
+      setting_label: values.setting_label || values.setting_key,
+      value: values.value || '',
+      is_secret: Number(values.is_secret || 0),
+      notes: values.notes || ''
+    });
+  });
+
+  await api('/api/settings', {
+    method: 'PUT',
+    body: JSON.stringify({ settings })
+  });
+  await loadSettings();
 }
 
 async function onPropertySubmit(event) {
@@ -355,6 +506,7 @@ async function refreshDashboard() {
 
 async function refreshAll() {
   await refreshDashboard();
+  await loadSettings();
   if (state.selectedPropertyId) {
     await renderSelectedProperty(state.selectedPropertyId);
   }
@@ -370,6 +522,19 @@ async function loadHealth() {
   } catch (err) {
     el('healthStatus').textContent = 'Offline';
   }
+}
+
+function toggleSecretVisibility() {
+  state.showSecrets = !state.showSecrets;
+  const button = el('toggleSecretsBtn');
+  button.textContent = state.showSecrets ? 'Nascondi segreti' : 'Mostra segreti';
+  document.querySelectorAll('[data-secret-field="true"]').forEach((input) => {
+    input.type = state.showSecrets ? 'text' : 'password';
+  });
+}
+
+function addCustomSettingRow() {
+  el('customSettingsList').appendChild(createCustomRow());
 }
 
 function bindEvents() {
@@ -414,7 +579,12 @@ function bindEvents() {
   });
 
   el('refreshBtn').addEventListener('click', refreshAll);
+  el('refreshBtnInline').addEventListener('click', refreshAll);
   el('rebuildMatchesBtn').addEventListener('click', async () => {
+    await api('/api/matches/rebuild', { method: 'POST', body: JSON.stringify({}) });
+    await refreshAll();
+  });
+  el('rebuildMatchesBtnInline').addEventListener('click', async () => {
     await api('/api/matches/rebuild', { method: 'POST', body: JSON.stringify({}) });
     await refreshAll();
   });
@@ -430,11 +600,16 @@ function bindEvents() {
 
   el('propertySearch').addEventListener('input', () => renderPropertyList(state.dashboard?.properties || []));
   el('propertyVerdictFilter').addEventListener('change', () => renderPropertyList(state.dashboard?.properties || []));
+  el('settingsForm').addEventListener('submit', saveSettings);
+  el('toggleSecretsBtn').addEventListener('click', toggleSecretVisibility);
+  el('addCustomSettingBtn').addEventListener('click', addCustomSettingRow);
 
   document.querySelectorAll('.nav-item').forEach((button) => {
     button.addEventListener('click', () => {
       document.querySelectorAll('.nav-item').forEach((item) => item.classList.remove('active'));
       button.classList.add('active');
+      const target = document.getElementById(button.dataset.view);
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   });
 }

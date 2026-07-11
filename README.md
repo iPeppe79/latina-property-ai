@@ -16,3 +16,4 @@ Apri `http://localhost:3000`.
 - Ogni record conserva una fonte o una marcatura `da verificare`.
 - Il report PDF è generato localmente senza servizi esterni.
 - L'integrazione OpenAI è opzionale tramite `OPENAI_API_KEY`.
+- La dashboard integrazioni salva chiavi e parametri locali in SQLite, incluse API GPT/OpenAI e Google Maps.

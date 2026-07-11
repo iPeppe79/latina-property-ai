@@ -13,36 +13,53 @@
           <div class="brand-mark">LPA</div>
           <div>
             <h1>latina-property-ai</h1>
-            <p>AI locale per mercato immobiliare</p>
+            <p>Control room immobiliare locale</p>
           </div>
         </div>
+
+        <div class="sidebar-card sidebar-card--accent">
+          <div class="label">Modalità</div>
+          <strong>Software operativo + UI moderna</strong>
+          <p>Focus su leggibilità, densità informativa e approvazione umana.</p>
+        </div>
+
         <nav class="nav">
           <button data-view="dashboard" class="nav-item active">Dashboard immobili</button>
           <button data-view="demands" class="nav-item">Dashboard domanda</button>
           <button data-view="crm" class="nav-item">CRM e follow-up</button>
+          <button data-view="integrations" class="nav-item">Integrazioni API</button>
           <button data-view="reports" class="nav-item">Report e export</button>
         </nav>
+
         <div class="sidebar-card">
-          <div class="label">Server</div>
+          <div class="label">Server locale</div>
           <strong>http://localhost:3000</strong>
           <span id="healthStatus">In attesa...</span>
         </div>
+
         <div class="sidebar-card">
-          <div class="label">Regole</div>
+          <div class="label">Guardrail</div>
           <p>Ogni dato conserva una fonte. Nessun invio automatico senza approvazione umana.</p>
         </div>
       </aside>
 
       <main class="main">
         <section class="hero">
-          <div>
-            <h2>Analisi locale del mercato immobiliare di Latina e provincia</h2>
+          <div class="hero-copy">
+            <div class="eyebrow">Latina e provincia</div>
+            <h2>Dashboard operativa per analisi immobiliare, domanda e integrazioni AI</h2>
             <p>
-              Popola immobili, importa CSV, valuta prezzi, calcola match domanda/offerta
-              e prepara task CRM con approvazione umana.
+              Inserisci immobili e richieste cliente, valuta il mercato, fai matching domanda/offerta
+              e prepara task CRM con bozza sempre approvata da una persona.
             </p>
+            <div class="hero-badges">
+              <span class="pill">SQLite locale</span>
+              <span class="pill">OpenAI opzionale</span>
+              <span class="pill">Google Maps opzionale</span>
+              <span class="pill warn">Nessun invio automatico</span>
+            </div>
           </div>
-          <div class="hero-actions">
+          <div class="hero-actions hero-actions--stack">
             <button id="rebuildMatchesBtn" class="primary">Ricalcola match</button>
             <button id="refreshBtn">Aggiorna dati</button>
           </div>
@@ -50,39 +67,48 @@
 
         <section class="stats-grid" id="statsGrid"></section>
 
-        <section class="panel-grid">
-          <div class="panel wide">
-            <div class="panel-head">
-              <h3>Immobili</h3>
-              <div class="inline-actions">
-                <input id="propertySearch" placeholder="Cerca immobile" />
-                <select id="propertyVerdictFilter">
-                  <option value="">Tutti i verdetti</option>
-                  <option value="SÌ">SÌ</option>
-                  <option value="FORSE">FORSE</option>
-                  <option value="NO">NO</option>
-                </select>
-                <button id="exportCsvBtn">Export CSV</button>
-              </div>
+        <section class="panel wide" id="dashboard">
+          <div class="panel-head">
+            <div>
+              <div class="section-kicker">Immobile</div>
+              <h3>Dashboard immobili</h3>
             </div>
-            <div class="content-split">
-              <div class="list" id="propertyList"></div>
-              <div class="detail" id="propertyDetail">
-                <div class="empty-state">Seleziona un immobile per vedere scheda, valutazione e match attivi.</div>
-              </div>
+            <div class="inline-actions">
+              <input id="propertySearch" placeholder="Cerca immobile" />
+              <select id="propertyVerdictFilter">
+                <option value="">Tutti i verdetti</option>
+                <option value="SÌ">SÌ</option>
+                <option value="FORSE">FORSE</option>
+                <option value="NO">NO</option>
+              </select>
+              <button id="exportCsvBtn">Export CSV</button>
             </div>
           </div>
+          <div class="content-split">
+            <div class="list" id="propertyList"></div>
+            <div class="detail" id="propertyDetail">
+              <div class="empty-state">Seleziona un immobile per vedere scheda, valutazione e match attivi.</div>
+            </div>
+          </div>
+        </section>
 
-          <div class="panel">
+        <section class="panel-grid panel-grid--two">
+          <div class="panel" id="propertyEntry">
             <div class="panel-head">
-              <h3>Nuovo immobile</h3>
+              <div>
+                <div class="section-kicker">Input</div>
+                <h3>Nuovo immobile</h3>
+              </div>
             </div>
             <form id="propertyForm" class="form-grid"></form>
           </div>
 
-          <div class="panel">
+          <div class="panel" id="csvImport">
             <div class="panel-head">
-              <h3>Import CSV immobili</h3>
+              <div>
+                <div class="section-kicker">Import</div>
+                <h3>Import CSV immobili</h3>
+              </div>
             </div>
             <div class="form-grid">
               <label>File CSV<input type="file" id="csvFile" accept=".csv,text/csv" /></label>
@@ -90,32 +116,121 @@
               <button id="importCsvBtn" type="button" class="primary">Importa CSV</button>
             </div>
           </div>
+        </section>
 
-          <div class="panel wide">
-            <div class="panel-head">
-              <h3>Domanda cliente</h3>
-            </div>
-            <div class="content-split">
-              <div class="list" id="demandList"></div>
-              <div class="detail" id="demandDetail">
-                <div class="empty-state">Seleziona una richiesta cliente per vedere requisiti e match.</div>
-              </div>
+        <section class="panel wide" id="demands">
+          <div class="panel-head">
+            <div>
+              <div class="section-kicker">Domanda</div>
+              <h3>Dashboard domanda</h3>
             </div>
           </div>
+          <div class="content-split">
+            <div class="list" id="demandList"></div>
+            <div class="detail" id="demandDetail">
+              <div class="empty-state">Seleziona una richiesta cliente per vedere requisiti e match.</div>
+            </div>
+          </div>
+        </section>
 
-          <div class="panel">
+        <section class="panel-grid panel-grid--two">
+          <div class="panel" id="demandEntry">
             <div class="panel-head">
-              <h3>Nuova richiesta</h3>
+              <div>
+                <div class="section-kicker">Input</div>
+                <h3>Nuova richiesta</h3>
+              </div>
             </div>
             <form id="demandForm" class="form-grid"></form>
           </div>
 
-          <div class="panel wide">
+          <div class="panel" id="reports">
             <div class="panel-head">
-              <h3>CRM e follow-up</h3>
+              <div>
+                <div class="section-kicker">Output</div>
+                <h3>Report e azioni consigliate</h3>
+              </div>
             </div>
-            <div id="taskList" class="task-list"></div>
+            <div class="callout">
+              <p>
+                I report PDF e l'export CSV si basano sui dati locali e sulle fonti registrate.
+                Le azioni commerciali restano sempre in bozza fino ad approvazione.
+              </p>
+            </div>
+            <div class="mini-actions">
+              <button id="refreshBtnInline">Aggiorna vista</button>
+              <button id="rebuildMatchesBtnInline" class="primary">Ricalcola match</button>
+            </div>
           </div>
+        </section>
+
+        <section class="panel wide" id="crm">
+          <div class="panel-head">
+            <div>
+              <div class="section-kicker">CRM</div>
+              <h3>CRM contatti e follow-up</h3>
+            </div>
+          </div>
+          <div id="taskList" class="task-list"></div>
+        </section>
+
+        <section class="panel wide" id="integrations">
+          <div class="panel-head">
+            <div>
+              <div class="section-kicker">Integrazioni</div>
+              <h3>Dashboard API e configurazioni locali</h3>
+            </div>
+            <div class="inline-actions">
+              <button type="button" id="toggleSecretsBtn">Mostra segreti</button>
+              <button type="submit" form="settingsForm" class="primary">Salva integrazioni</button>
+            </div>
+          </div>
+          <p class="section-note">
+            Qui puoi salvare chiavi GPT/OpenAI, Google Maps e ogni altro parametro operativo.
+            I valori restano locali e servono solo a preparare analisi, bozze e task approvati.
+          </p>
+          <form id="settingsForm" class="settings-form">
+            <div class="settings-grid">
+              <article class="settings-card">
+                <div class="settings-card__head">
+                  <div>
+                    <div class="section-kicker">OpenAI / GPT</div>
+                    <h4>Analisi testuale e riepiloghi</h4>
+                  </div>
+                  <span class="pill">opzionale</span>
+                </div>
+                <label>API key<input data-setting-provider="OpenAI" data-setting-key="openai_api_key" data-secret-field="true" type="password" placeholder="sk-..." /></label>
+                <label>Modello<input data-setting-provider="OpenAI" data-setting-key="openai_model" placeholder="gpt-4.1-mini" /></label>
+                <label>Base URL<input data-setting-provider="OpenAI" data-setting-key="openai_base_url" placeholder="https://api.openai.com/v1" /></label>
+                <label>Note<textarea data-setting-provider="OpenAI" data-setting-key="openai_notes" rows="3" placeholder="Uso previsto, limiti, verifiche"></textarea></label>
+              </article>
+
+              <article class="settings-card">
+                <div class="settings-card__head">
+                  <div>
+                    <div class="section-kicker">Google Maps</div>
+                    <h4>Geocoding, mappe e luoghi</h4>
+                  </div>
+                  <span class="pill">opzionale</span>
+                </div>
+                <label>API key<input data-setting-provider="Google Maps" data-setting-key="google_maps_api_key" data-secret-field="true" type="password" placeholder="AIza..." /></label>
+                <label>Geocoding key<input data-setting-provider="Google Maps" data-setting-key="google_geocoding_api_key" data-secret-field="true" type="password" placeholder="AIza..." /></label>
+                <label>Places key<input data-setting-provider="Google Maps" data-setting-key="google_places_api_key" data-secret-field="true" type="password" placeholder="AIza..." /></label>
+                <label>Note<textarea data-setting-provider="Google Maps" data-setting-key="google_maps_notes" rows="3" placeholder="Ambiti abilitati, limitazioni, controlli"></textarea></label>
+              </article>
+
+              <article class="settings-card settings-card--wide">
+                <div class="settings-card__head">
+                  <div>
+                    <div class="section-kicker">Varie ed eventuali</div>
+                    <h4>Parametri custom e integrazioni future</h4>
+                  </div>
+                  <button type="button" id="addCustomSettingBtn">Aggiungi voce</button>
+                </div>
+                <div class="custom-settings" id="customSettingsList"></div>
+              </article>
+            </div>
+          </form>
         </section>
       </main>
     </div>
@@ -172,6 +287,21 @@
       </select></label>
       <label>Note<textarea name="notes" rows="4"></textarea></label>
       <button type="submit" class="primary">Salva richiesta</button>
+    </template>
+
+    <template id="customSettingRowTemplate">
+      <div class="custom-setting-row">
+        <label>Provider<input data-custom-field="provider" placeholder="Custom" /></label>
+        <label>Chiave<input data-custom-field="setting_key" placeholder="custom_key" /></label>
+        <label>Etichetta<input data-custom-field="setting_label" placeholder="Etichetta leggibile" /></label>
+        <label>Valore<input data-custom-field="value" placeholder="Valore o URL" /></label>
+        <label>Segreto<select data-custom-field="is_secret">
+          <option value="0">No</option>
+          <option value="1">Sì</option>
+        </select></label>
+        <label>Note<input data-custom-field="notes" placeholder="Scopo e fonte" /></label>
+        <button type="button" data-remove-setting-row>Rimuovi</button>
+      </div>
     </template>
 
     <script src="/app.js"></script>

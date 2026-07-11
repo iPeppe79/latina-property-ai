@@ -15,6 +15,7 @@ Web app locale per analizzare il mercato immobiliare di Latina e provincia, con 
 - CRM contatti e follow-up
 - Generatore report PDF e azioni consigliate
 - Export CSV immobili filtrati
+- Dashboard integrazioni API per OpenAI, Google Maps e voci custom
 
 ## Regole operative
 
@@ -59,6 +60,15 @@ Web app locale per analizzare il mercato immobiliare di Latina e provincia, con 
 - CRM follow-up con stato, canale, prossima azione, bozza messaggio e approvazione umana
 - Report PDF immobile
 - Export CSV immobili filtrati
+- Configurazione locale delle integrazioni API con salvataggio su SQLite
+
+## UI recente
+
+- Layout ibrido: software operativo con rifinitura da prodotto web moderno
+- Sidebar scura e workspace chiaro per massima leggibilità
+- Sezione integrazioni dedicata alle chiavi GPT/OpenAI, Google Maps e parametri custom
+- Campi segreti gestibili localmente con visualizzazione on/off
+- Conservati i flussi esistenti per immobili, domanda, CRM, report e match
 
 ## Verifiche eseguite
 

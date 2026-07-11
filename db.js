@@ -229,11 +229,26 @@ function execSchema() {
       FOREIGN KEY (source_record_id) REFERENCES raw_records(id)
     );
 
+    CREATE TABLE IF NOT EXISTS app_settings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      provider TEXT NOT NULL,
+      setting_key TEXT NOT NULL,
+      setting_label TEXT NOT NULL,
+      value TEXT,
+      is_secret INTEGER NOT NULL DEFAULT 0,
+      notes TEXT,
+      source_type TEXT NOT NULL DEFAULT 'manual',
+      source_reference TEXT NOT NULL DEFAULT 'local-config',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_properties_city_type ON properties(city, property_type);
     CREATE INDEX IF NOT EXISTS idx_demands_cities ON buyer_demands(target_cities);
     CREATE INDEX IF NOT EXISTS idx_matches_property ON matches(property_id, buyer_demand_id);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_matches_unique ON matches(property_id, buyer_demand_id);
     CREATE INDEX IF NOT EXISTS idx_tasks_status ON outreach_tasks(status, approval_status);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_app_settings_unique ON app_settings(provider, setting_key);
   `);
 }
 
@@ -241,7 +256,34 @@ function now() {
   return new Date().toISOString();
 }
 
+function seedDefaultSettings() {
+  const count = get('SELECT COUNT(*) AS count FROM app_settings').count;
+  if (count > 0) return;
+
+  const settings = db.prepare(`
+    INSERT INTO app_settings (
+      provider, setting_key, setting_label, value, is_secret, notes, source_type, source_reference, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  [
+    ['OpenAI', 'openai_api_key', 'OpenAI API key', '', 1, 'Chiave per analisi testuale opzionale'],
+    ['OpenAI', 'openai_model', 'OpenAI model', 'gpt-4.1-mini', 0, 'Modello suggerito per il MVP locale'],
+    ['OpenAI', 'openai_base_url', 'OpenAI base URL', '', 0, 'Lascia vuoto per l endpoint standard'],
+    ['Google Maps', 'google_maps_api_key', 'Google Maps API key', '', 1, 'Geocoding e mappe'],
+    ['Google Maps', 'google_geocoding_api_key', 'Google Geocoding API key', '', 1, 'Riserva o chiave dedicata'],
+    ['Google Maps', 'google_places_api_key', 'Google Places API key', '', 1, 'Ricerca luoghi e POI'],
+    ['General', 'crm_webhook_url', 'CRM webhook URL', '', 0, 'Facoltativo per future automazioni approvate'],
+    ['General', 'crm_default_channel', 'Default CRM channel', 'whatsapp', 0, 'Canale predefinito per task'],
+    ['General', 'office_email', 'Office email', '', 0, 'Casella operativa locale']
+  ].forEach((item) => {
+    settings.run(item[0], item[1], item[2], item[3], item[4], item[5], 'seed', 'demo-seed', now(), now());
+  });
+}
+
 function seedIfEmpty() {
+  seedDefaultSettings();
+
   const count = get('SELECT COUNT(*) AS count FROM properties').count;
   if (count > 0) return;
 

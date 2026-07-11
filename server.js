@@ -52,6 +52,66 @@ function jsonResponse(res, data) {
   res.json({ ok: true, ...data });
 }
 
+function normalizeSettingRow(row) {
+  return {
+    id: row.id,
+    provider: row.provider,
+    setting_key: row.setting_key,
+    setting_label: row.setting_label,
+    value: row.value ?? '',
+    is_secret: Boolean(row.is_secret),
+    notes: row.notes || '',
+    source_type: row.source_type,
+    source_reference: row.source_reference,
+    created_at: row.created_at,
+    updated_at: row.updated_at
+  };
+}
+
+function upsertSetting(payload) {
+  const provider = payload.provider || 'General';
+  const settingKey = payload.setting_key || payload.key;
+  if (!settingKey) {
+    return null;
+  }
+  const settingLabel = payload.setting_label || payload.label || settingKey;
+  const value = payload.value ?? '';
+  const isSecret = Number(Boolean(payload.is_secret || payload.secret));
+  const notes = payload.notes || '';
+
+  run(`
+    INSERT INTO app_settings (
+      provider, setting_key, setting_label, value, is_secret, notes, source_type, source_reference, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(provider, setting_key) DO UPDATE SET
+      setting_label = excluded.setting_label,
+      value = excluded.value,
+      is_secret = excluded.is_secret,
+      notes = excluded.notes,
+      source_type = excluded.source_type,
+      source_reference = excluded.source_reference,
+      updated_at = excluded.updated_at
+  `, [
+    provider,
+    settingKey,
+    settingLabel,
+    value,
+    isSecret,
+    notes,
+    payload.source_type || 'manual',
+    payload.source_reference || 'local-config',
+    now(),
+    now()
+  ]);
+
+  return get('SELECT * FROM app_settings WHERE provider = ? AND setting_key = ?', [provider, settingKey]);
+}
+
+function getSettingValue(provider, settingKey, fallback = '') {
+  const row = get('SELECT value FROM app_settings WHERE provider = ? AND setting_key = ?', [provider, settingKey]);
+  return row ? row.value || fallback : fallback;
+}
+
 function mapProperty(row) {
   return {
     ...row,
@@ -256,6 +316,24 @@ app.get('/api/health', (req, res) => {
   jsonResponse(res, { status: 'ok', now: now() });
 });
 
+app.get('/api/settings', (req, res) => {
+  const settings = all('SELECT * FROM app_settings ORDER BY provider ASC, setting_key ASC').map(normalizeSettingRow);
+  jsonResponse(res, { settings });
+});
+
+app.put('/api/settings', (req, res) => {
+  const payload = req.body || {};
+  const input = Array.isArray(payload.settings) ? payload.settings : [payload];
+  const updated = [];
+  input.forEach((item) => {
+    const row = upsertSetting(item);
+    if (row) {
+      updated.push(normalizeSettingRow(row));
+    }
+  });
+  jsonResponse(res, { updated, count: updated.length });
+});
+
 app.get('/api/dashboard', (req, res) => {
   const properties = all(`
     SELECT p.*, COUNT(DISTINCT m.buyer_demand_id) AS match_count
@@ -277,7 +355,8 @@ app.get('/api/dashboard', (req, res) => {
     demands: get('SELECT COUNT(*) AS count FROM buyer_demands').count,
     matches: get('SELECT COUNT(*) AS count FROM matches').count,
     tasks: get('SELECT COUNT(*) AS count FROM outreach_tasks').count,
-    pendingApprovals: get("SELECT COUNT(*) AS count FROM outreach_tasks WHERE approval_status = 'pending'").count
+    pendingApprovals: get("SELECT COUNT(*) AS count FROM outreach_tasks WHERE approval_status = 'pending'").count,
+    sources: get('SELECT COUNT(*) AS count FROM raw_records').count
   };
   jsonResponse(res, {
     stats,
