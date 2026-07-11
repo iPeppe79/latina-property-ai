@@ -1,0 +1,17 @@
+{
+  "name": "latina-property-ai",
+  "version": "1.0.0",
+  "description": "Local AI property market analyzer for Latina and province",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "express": "^5.2.1"
+  }
+}

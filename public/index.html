@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>latina-property-ai</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">LPA</div>
+          <div>
+            <h1>latina-property-ai</h1>
+            <p>AI locale per mercato immobiliare</p>
+          </div>
+        </div>
+        <nav class="nav">
+          <button data-view="dashboard" class="nav-item active">Dashboard immobili</button>
+          <button data-view="demands" class="nav-item">Dashboard domanda</button>
+          <button data-view="crm" class="nav-item">CRM e follow-up</button>
+          <button data-view="reports" class="nav-item">Report e export</button>
+        </nav>
+        <div class="sidebar-card">
+          <div class="label">Server</div>
+          <strong>http://localhost:3000</strong>
+          <span id="healthStatus">In attesa...</span>
+        </div>
+        <div class="sidebar-card">
+          <div class="label">Regole</div>
+          <p>Ogni dato conserva una fonte. Nessun invio automatico senza approvazione umana.</p>
+        </div>
+      </aside>
+
+      <main class="main">
+        <section class="hero">
+          <div>
+            <h2>Analisi locale del mercato immobiliare di Latina e provincia</h2>
+            <p>
+              Popola immobili, importa CSV, valuta prezzi, calcola match domanda/offerta
+              e prepara task CRM con approvazione umana.
+            </p>
+          </div>
+          <div class="hero-actions">
+            <button id="rebuildMatchesBtn" class="primary">Ricalcola match</button>
+            <button id="refreshBtn">Aggiorna dati</button>
+          </div>
+        </section>
+
+        <section class="stats-grid" id="statsGrid"></section>
+
+        <section class="panel-grid">
+          <div class="panel wide">
+            <div class="panel-head">
+              <h3>Immobili</h3>
+              <div class="inline-actions">
+                <input id="propertySearch" placeholder="Cerca immobile" />
+                <select id="propertyVerdictFilter">
+                  <option value="">Tutti i verdetti</option>
+                  <option value="SÌ">SÌ</option>
+                  <option value="FORSE">FORSE</option>
+                  <option value="NO">NO</option>
+                </select>
+                <button id="exportCsvBtn">Export CSV</button>
+              </div>
+            </div>
+            <div class="content-split">
+              <div class="list" id="propertyList"></div>
+              <div class="detail" id="propertyDetail">
+                <div class="empty-state">Seleziona un immobile per vedere scheda, valutazione e match attivi.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head">
+              <h3>Nuovo immobile</h3>
+            </div>
+            <form id="propertyForm" class="form-grid"></form>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head">
+              <h3>Import CSV immobili</h3>
+            </div>
+            <div class="form-grid">
+              <label>File CSV<input type="file" id="csvFile" accept=".csv,text/csv" /></label>
+              <label>Fonte<input id="csvSource" placeholder="es. portale, agenzia, estrazione manuale" /></label>
+              <button id="importCsvBtn" type="button" class="primary">Importa CSV</button>
+            </div>
+          </div>
+
+          <div class="panel wide">
+            <div class="panel-head">
+              <h3>Domanda cliente</h3>
+            </div>
+            <div class="content-split">
+              <div class="list" id="demandList"></div>
+              <div class="detail" id="demandDetail">
+                <div class="empty-state">Seleziona una richiesta cliente per vedere requisiti e match.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head">
+              <h3>Nuova richiesta</h3>
+            </div>
+            <form id="demandForm" class="form-grid"></form>
+          </div>
+
+          <div class="panel wide">
+            <div class="panel-head">
+              <h3>CRM e follow-up</h3>
+            </div>
+            <div id="taskList" class="task-list"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <template id="propertyFormTemplate">
+      <label>Titolo<input name="title" required placeholder="Appartamento trilocale" /></label>
+      <label>Indirizzo<input name="address" required placeholder="Via ..." /></label>
+      <label>Città<input name="city" required placeholder="Latina" /></label>
+      <label>Zona<input name="zone" placeholder="Centro" /></label>
+      <label>Tipologia<input name="property_type" required placeholder="appartamento" /></label>
+      <label>Prezzo richiesto<input name="asking_price" type="number" min="0" step="1" required /></label>
+      <label>Superficie mq<input name="surface_mq" type="number" min="1" step="0.1" required /></label>
+      <label>Locali<input name="rooms" type="number" min="0" step="1" /></label>
+      <label>Bagni<input name="bathrooms" type="number" min="0" step="1" /></label>
+      <label>Classe energetica<input name="energy_class" placeholder="D" /></label>
+      <label>Stato<input name="condition_state" placeholder="buono" /></label>
+      <label>Vacancy<select name="vacancy_status">
+        <option value="unknown">da verificare</option>
+        <option value="vacant">vacant</option>
+        <option value="occupied">occupied</option>
+      </select></label>
+      <label>Motivazione venditore<select name="seller_motivation">
+        <option value="da verificare">da verificare</option>
+        <option value="bassa">bassa</option>
+        <option value="media">media</option>
+        <option value="alta">alta</option>
+      </select></label>
+      <label>Fonte<input name="source_reference" placeholder="annuncio, visita, nota" /></label>
+      <label>Note<textarea name="notes_summary" rows="4" placeholder="Dati da verificare, punti critici, osservazioni"></textarea></label>
+      <button type="submit" class="primary">Salva immobile</button>
+    </template>
+
+    <template id="demandFormTemplate">
+      <label>Nome cliente<input name="buyer_name" required /></label>
+      <label>Telefono<input name="phone" /></label>
+      <label>Email<input name="email" type="email" /></label>
+      <label>Città target<input name="target_cities" placeholder="Latina, Sabaudia" /></label>
+      <label>Budget min<input name="budget_min" type="number" min="0" step="1" /></label>
+      <label>Budget max<input name="budget_max" type="number" min="0" step="1" /></label>
+      <label>Mq min<input name="surface_min" type="number" min="0" step="0.1" /></label>
+      <label>Mq max<input name="surface_max" type="number" min="0" step="0.1" /></label>
+      <label>Locali min<input name="rooms_min" type="number" min="0" step="1" /></label>
+      <label>Tipologie<input name="property_types" placeholder="appartamento, villa" /></label>
+      <label>Urgenza<select name="urgency">
+        <option value="bassa">bassa</option>
+        <option value="media" selected>media</option>
+        <option value="alta">alta</option>
+      </select></label>
+      <label>Finanziamento<select name="financing_status">
+        <option value="da verificare">da verificare</option>
+        <option value="pre-approvato">pre-approvato</option>
+        <option value="mutuo in corso">mutuo in corso</option>
+        <option value="cash">cash</option>
+      </select></label>
+      <label>Note<textarea name="notes" rows="4"></textarea></label>
+      <button type="submit" class="primary">Salva richiesta</button>
+    </template>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
