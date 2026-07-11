@@ -17,10 +17,13 @@
           </div>
         </div>
 
-        <div class="sidebar-card sidebar-card--accent">
-          <div class="label">Modalità</div>
-          <strong>Software operativo + UI moderna</strong>
-          <p>Focus su leggibilità, densità informativa e approvazione umana.</p>
+        <div class="sidebar-card sidebar-logo-card">
+          <img class="sidebar-logo" src="/assets/gg-real-estate.png" alt="GG Real Estate" />
+          <div class="sidebar-logo-copy">
+            <div class="label">Piattaforma</div>
+            <strong>Meteo di Latina</strong>
+            <p>Control room immobiliare locale con lettura professionale e dati verificabili.</p>
+          </div>
         </div>
 
         <nav class="nav">
@@ -217,6 +220,25 @@
                 <label>Geocoding key<input data-setting-provider="Google Maps" data-setting-key="google_geocoding_api_key" data-secret-field="true" type="password" placeholder="AIza..." /></label>
                 <label>Places key<input data-setting-provider="Google Maps" data-setting-key="google_places_api_key" data-secret-field="true" type="password" placeholder="AIza..." /></label>
                 <label>Note<textarea data-setting-provider="Google Maps" data-setting-key="google_maps_notes" rows="3" placeholder="Ambiti abilitati, limitazioni, controlli"></textarea></label>
+              </article>
+
+              <article class="settings-card">
+                <div class="settings-card__head">
+                  <div>
+                    <div class="section-kicker">Meteo</div>
+                    <h4>Previsioni, allerte e condizioni locali</h4>
+                  </div>
+                  <span class="pill">opzionale</span>
+                </div>
+                <label>Provider<select data-setting-provider="Weather" data-setting-key="weather_provider">
+                  <option value="OpenWeather">OpenWeather</option>
+                  <option value="WeatherAPI">WeatherAPI</option>
+                  <option value="Open-Meteo">Open-Meteo</option>
+                </select></label>
+                <label>API key<input data-setting-provider="Weather" data-setting-key="weather_api_key" data-secret-field="true" type="password" placeholder="chiave meteo" /></label>
+                <label>Endpoint/Base URL<input data-setting-provider="Weather" data-setting-key="weather_base_url" placeholder="https://api.openweathermap.org" /></label>
+                <label>Città di default<input data-setting-provider="Weather" data-setting-key="weather_default_city" placeholder="Latina" /></label>
+                <label>Note<textarea data-setting-provider="Weather" data-setting-key="weather_notes" rows="3" placeholder="Uso previsto, frequenza, verifiche"></textarea></label>
               </article>
 
               <article class="settings-card settings-card--wide">

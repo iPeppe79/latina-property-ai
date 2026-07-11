@@ -14,7 +14,12 @@ const FIXED_SETTING_FIELDS = [
   { provider: 'Google Maps', key: 'google_maps_api_key', label: 'Google Maps API key', secret: true },
   { provider: 'Google Maps', key: 'google_geocoding_api_key', label: 'Google Geocoding API key', secret: true },
   { provider: 'Google Maps', key: 'google_places_api_key', label: 'Google Places API key', secret: true },
-  { provider: 'Google Maps', key: 'google_maps_notes', label: 'Google Maps notes', secret: false }
+  { provider: 'Google Maps', key: 'google_maps_notes', label: 'Google Maps notes', secret: false },
+  { provider: 'Weather', key: 'weather_provider', label: 'Weather provider', secret: false },
+  { provider: 'Weather', key: 'weather_api_key', label: 'Weather API key', secret: true },
+  { provider: 'Weather', key: 'weather_base_url', label: 'Weather base URL', secret: false },
+  { provider: 'Weather', key: 'weather_default_city', label: 'Weather default city', secret: false },
+  { provider: 'Weather', key: 'weather_notes', label: 'Weather notes', secret: false }
 ];
 
 const el = (id) => document.getElementById(id);

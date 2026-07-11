@@ -273,6 +273,11 @@ function seedDefaultSettings() {
     ['Google Maps', 'google_maps_api_key', 'Google Maps API key', '', 1, 'Geocoding e mappe'],
     ['Google Maps', 'google_geocoding_api_key', 'Google Geocoding API key', '', 1, 'Riserva o chiave dedicata'],
     ['Google Maps', 'google_places_api_key', 'Google Places API key', '', 1, 'Ricerca luoghi e POI'],
+    ['Weather', 'weather_provider', 'Weather provider', 'Open-Meteo', 0, 'Provider meteo di default'],
+    ['Weather', 'weather_api_key', 'Weather API key', '', 1, 'Chiave opzionale per provider meteo'],
+    ['Weather', 'weather_base_url', 'Weather base URL', '', 0, 'Endpoint del servizio meteo'],
+    ['Weather', 'weather_default_city', 'Weather default city', 'Latina', 0, 'Città per previsioni e condizioni'],
+    ['Weather', 'weather_notes', 'Weather notes', '', 0, 'Uso previsto e verifiche'],
     ['General', 'crm_webhook_url', 'CRM webhook URL', '', 0, 'Facoltativo per future automazioni approvate'],
     ['General', 'crm_default_channel', 'Default CRM channel', 'whatsapp', 0, 'Canale predefinito per task'],
     ['General', 'office_email', 'Office email', '', 0, 'Casella operativa locale']

@@ -156,8 +156,10 @@ button:focus {
   box-shadow: none;
 }
 
-.sidebar-card--accent {
-  background: linear-gradient(180deg, rgba(20, 184, 166, 0.12), rgba(255, 255, 255, 0.05));
+.sidebar-logo-card {
+  display: grid;
+  gap: 0.9rem;
+  background: linear-gradient(180deg, rgba(20, 184, 166, 0.14), rgba(255, 255, 255, 0.05));
 }
 
 .sidebar-card strong {
@@ -168,6 +170,21 @@ button:focus {
 .sidebar-card p,
 .sidebar-card span {
   color: rgba(255, 255, 255, 0.72);
+}
+
+.sidebar-logo {
+  width: 100%;
+  display: block;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.08);
+  object-fit: contain;
+  aspect-ratio: 1 / 1;
+  padding: 0.35rem;
+}
+
+.sidebar-logo-copy strong {
+  font-size: 1.05rem;
+  letter-spacing: -0.02em;
 }
 
 .label {
