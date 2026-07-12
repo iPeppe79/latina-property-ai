@@ -286,162 +286,25 @@ function seedDefaultSettings() {
   });
 }
 
-function seedIfEmpty() {
-  seedDefaultSettings();
+function cleanupDemoData() {
+  const demoWhere = `record_type = 'seed' OR source_name = 'demo-seed' OR source_identifier = 'initial-demo'`;
 
-  const count = get('SELECT COUNT(*) AS count FROM properties').count;
-  if (count > 0) return;
-
-  const seedRecord = run(
-    `INSERT INTO raw_records (record_type, source_name, source_identifier, payload_json, imported_at, import_status, verification_status, note)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      'seed',
-      'demo-seed',
-      'initial-demo',
-      JSON.stringify({ kind: 'seed', area: 'Latina e provincia' }),
-      now(),
-      'seeded',
-      'da verificare',
-      'Dati di esempio iniziali'
-    ]
-  );
-
-  const rawId = seedRecord.lastInsertRowid;
-
-  const citySet = [
-    {
-      title: 'Appartamento trilocale in centro',
-      city: 'Latina',
-      zone: 'Centro',
-      property_type: 'appartamento',
-      asking_price: 175000,
-      surface_mq: 82,
-      rooms: 3,
-      bathrooms: 1,
-      condition_state: 'buono',
-      energy_class: 'F',
-      vacancy_status: 'occupied',
-      seller_motivation: 'media',
-      notes_summary: 'Soluzione centrale con balcone e box',
-    },
-    {
-      title: 'Villa con giardino',
-      city: 'Sabaudia',
-      zone: 'Lungomare',
-      property_type: 'villa',
-      asking_price: 420000,
-      surface_mq: 145,
-      rooms: 5,
-      bathrooms: 2,
-      condition_state: 'ottimo',
-      energy_class: 'D',
-      vacancy_status: 'vacant',
-      seller_motivation: 'alta',
-      notes_summary: 'Proprietario motivato, libera da subito',
-    },
-    {
-      title: 'Bilocale da ristrutturare',
-      city: 'Terracina',
-      zone: 'Semicentro',
-      property_type: 'appartamento',
-      asking_price: 132000,
-      surface_mq: 58,
-      rooms: 2,
-      bathrooms: 1,
-      condition_state: 'da ristrutturare',
-      energy_class: 'G',
-      vacancy_status: 'vacant',
-      seller_motivation: 'alta',
-      notes_summary: 'Prezzo trattabile, richieste in arrivo',
-    }
-  ];
-
-  const insertProperty = db.prepare(`
-    INSERT INTO properties (
-      external_ref, title, address, city, province, zone, property_type, asking_price, surface_mq,
-      rooms, bathrooms, floor, condition_state, energy_class, status, vacancy_status, seller_motivation,
-      notes_summary, price_per_mq, market_price_per_mq, property_score, vacancy_score, seller_motivation_score,
-      verdict, criticalities, recommended_action, source_type, source_reference, source_record_id, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-
-  const insertDemand = db.prepare(`
-    INSERT INTO buyer_demands (
-      entity_id, buyer_name, phone, email, target_cities, budget_min, budget_max, surface_min, surface_max,
-      rooms_min, property_types, urgency, financing_status, notes, status, source_type, source_reference,
-      source_record_id, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-
-  const entities = db.prepare(`
-    INSERT INTO entities (
-      entity_type, name, phone, email, company, preferred_channel, status, source_type, source_reference,
-      source_record_id, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-
-  const demoSeller = entities.run(
-    'seller',
-    'Famiglia Rossi',
-    '3330000001',
-    'rossi@example.com',
-    null,
-    'telefono',
-    'attivo',
-    'seed',
-    'demo-seed',
-    rawId,
-    now(),
-    now()
-  ).lastInsertRowid;
-
-  citySet.forEach((item, index) => {
-    const p = insertProperty.run(
-      `seed-${index + 1}`,
-      item.title,
-      `${item.city}, ${item.zone}`,
-      item.city,
-      'LT',
-      item.zone,
-      item.property_type,
-      item.asking_price,
-      item.surface_mq,
-      item.rooms,
-      item.bathrooms,
-      '2',
-      item.condition_state,
-      item.energy_class,
-      'attivo',
-      item.vacancy_status,
-      item.seller_motivation,
-      item.notes_summary,
-      null,
-      null,
-      null,
-      null,
-      null,
-      'FORSE',
-      'Dati di esempio',
-      'Serve verifica manuale',
-      'seed',
-      'demo-seed',
-      rawId,
-      now(),
-      now()
-    );
-
-    db.prepare(`
-      INSERT INTO property_entity_links (
-        property_id, entity_id, role, source_type, source_reference, source_record_id, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(p.lastInsertRowid, demoSeller, 'owner', 'seed', 'demo-seed', rawId, now(), now());
-  });
+  run(`DELETE FROM property_entity_links WHERE source_type = 'seed' OR source_reference = 'demo-seed'`);
+  run(`DELETE FROM listings WHERE source_type = 'seed' OR source_reference = 'demo-seed'`);
+  run(`DELETE FROM matches WHERE source_type = 'seed' OR source_reference = 'demo-seed'`);
+  run(`DELETE FROM outreach_tasks WHERE source_type = 'seed' OR source_reference = 'demo-seed'`);
+  run(`DELETE FROM notes WHERE source_type = 'seed' OR source_reference = 'demo-seed'`);
+  run(`DELETE FROM property_events WHERE source_type = 'seed' OR source_reference = 'demo-seed'`);
+  run(`DELETE FROM buyer_demands WHERE source_type = 'seed' OR source_reference = 'demo-seed'`);
+  run(`DELETE FROM entities WHERE source_type = 'seed' OR source_reference = 'demo-seed'`);
+  run(`DELETE FROM properties WHERE source_type = 'seed' OR source_reference = 'demo-seed'`);
+  run(`DELETE FROM raw_records WHERE ${demoWhere}`);
 }
 
 function initDb() {
   execSchema();
-  seedIfEmpty();
+  seedDefaultSettings();
+  cleanupDemoData();
 }
 
 module.exports = {
