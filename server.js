@@ -67,6 +67,40 @@ function buildSearchTerms(query, city, propertyType, portals = []) {
   return [...parts, ...portalTerms].join(' ');
 }
 
+function buildSearchQueryForProvider(payload) {
+  const provider = String(payload.provider || 'web').toLowerCase();
+  const query = cleanSearchQuery(payload.query || payload.q || '');
+  const city = cleanSearchQuery(payload.city || 'Latina');
+  const propertyType = cleanSearchQuery(payload.property_type || '');
+  const portals = parseJsonList(payload.portals || []);
+
+  if (provider === 'idealista') {
+    const searchTerms = buildSearchTerms(query, city, propertyType, portals);
+    return {
+      provider: 'idealista',
+      searchTerms: `site:idealista.it ${searchTerms}`.trim(),
+      city,
+      propertyType,
+      portals: portals.length ? portals : ['idealista.it']
+    };
+  }
+
+  return {
+    provider: 'web',
+    searchTerms: buildSearchTerms(query, city, propertyType, portals),
+    city,
+    propertyType,
+    portals
+  };
+}
+
+function isIdealistaResult(result) {
+  const haystack = [result.url, result.title, result.snippet]
+    .map((value) => String(value || '').toLowerCase())
+    .join(' ');
+  return haystack.includes('idealista.it');
+}
+
 function decodeHtmlEntities(text) {
   return String(text || '')
     .replace(/&nbsp;/g, ' ')
@@ -856,25 +890,23 @@ app.post('/api/properties/import-csv', (req, res) => {
 app.post('/api/properties/search-online', async (req, res) => {
   try {
     const payload = req.body || {};
-    const query = cleanSearchQuery(payload.query || payload.q || '');
-    const city = cleanSearchQuery(payload.city || 'Latina');
-    const propertyType = cleanSearchQuery(payload.property_type || '');
-    const portals = parseJsonList(payload.portals || []);
+    const built = buildSearchQueryForProvider(payload);
     const limit = Math.max(1, Math.min(20, Number(payload.limit || 10)));
 
-    if (!query && !city && !propertyType) {
+    if (!built.searchTerms) {
       return res.status(400).json({ ok: false, error: 'query mancante' });
     }
 
-    const searchTerms = buildSearchTerms(query, city, propertyType, portals);
-    const results = await fetchDuckDuckGoResults(searchTerms, limit);
-    const enriched = results.map((result, index) => ({
+    const results = await fetchDuckDuckGoResults(built.searchTerms, limit);
+    const narrowed = built.provider === 'idealista' ? results.filter(isIdealistaResult) : results;
+    const enriched = narrowed.map((result, index) => ({
       id: `${Date.now()}-${index}`,
       ...result,
-      query: searchTerms,
-      city,
-      property_type: propertyType || 'da verificare',
-      portal_hint: portals.length ? portals.join(', ') : 'web',
+      query: built.searchTerms,
+      provider: built.provider,
+      city: built.city,
+      property_type: built.propertyType || 'da verificare',
+      portal_hint: built.portals.length ? built.portals.join(', ') : 'web',
       verification_status: 'da verificare'
     }));
 
@@ -884,9 +916,9 @@ app.post('/api/properties/search-online', async (req, res) => {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       'online_search',
-      'duckduckgo',
-      searchTerms,
-      JSON.stringify({ query: searchTerms, results: enriched }),
+      built.provider === 'idealista' ? 'idealista-search' : 'duckduckgo',
+      built.searchTerms,
+      JSON.stringify({ query: built.searchTerms, provider: built.provider, results: enriched }),
       now(),
       'searched',
       'da verificare',
@@ -894,7 +926,8 @@ app.post('/api/properties/search-online', async (req, res) => {
     ]);
 
     jsonResponse(res, {
-      query: searchTerms,
+      query: built.searchTerms,
+      provider: built.provider,
       results: enriched
     });
   } catch (error) {
@@ -907,11 +940,38 @@ app.post('/api/properties/import-online-result', (req, res) => {
     try {
       const payload = req.body || {};
       const sourceUrl = payload.url || payload.source_url;
-      if (!sourceUrl) {
-        return res.status(400).json({ ok: false, error: 'URL mancante' });
+      if (!sourceUrl && !payload.title && !payload.snippet) {
+        return res.status(400).json({ ok: false, error: 'URL o risultati mancanti' });
       }
 
-      const preview = await fetchUrlPreview(sourceUrl);
+      let preview = null;
+      if (sourceUrl) {
+        try {
+          preview = await fetchUrlPreview(sourceUrl);
+        } catch (error) {
+          preview = null;
+        }
+      }
+      if (!preview) {
+        preview = {
+          url: sourceUrl || payload.source_reference || 'da verificare',
+          title: safeText(payload.title || payload.name || 'Immobile online'),
+          description: safeText(payload.snippet || payload.description || 'Import da ricerca online'),
+          address: normalizePreviewAddress(payload.address || '', payload.city || 'Latina'),
+          city: safeText(payload.city || 'Latina'),
+          zone: safeText(payload.zone || 'da verificare'),
+          property_type: inferPropertyType([payload.title, payload.snippet, payload.property_type].join(' ')),
+          asking_price: Number(payload.asking_price || 0),
+          surface_mq: Number(payload.surface_mq || 0),
+          rooms: payload.rooms ? Number(payload.rooms) : null,
+          bathrooms: payload.bathrooms ? Number(payload.bathrooms) : null,
+          condition_state: payload.condition_state || 'da verificare',
+          energy_class: payload.energy_class || 'da verificare',
+          notes_summary: safeText(payload.snippet || payload.description || 'Import da ricerca online'),
+          source: payload.source || 'online-search',
+          preview_html: ''
+        };
+      }
       let aiData = null;
       try {
         aiData = await analyzePreviewWithOpenAI(preview, payload);
@@ -928,7 +988,7 @@ app.post('/api/properties/import-online-result', (req, res) => {
       `, [
         'online_property',
         draft.source_name || 'online-search',
-        sourceUrl,
+        sourceUrl || payload.source_reference || preview.url || 'da verificare',
         JSON.stringify({ payload, preview, aiData, draft }),
         now(),
         'imported',
@@ -995,13 +1055,13 @@ app.post('/api/properties/import-online-result', (req, res) => {
       `, [
         insert.lastInsertRowid,
         draft.source_name || 'online-search',
-        preview.url || sourceUrl,
+        preview.url || sourceUrl || payload.source_reference || 'da verificare',
         payload.published_at || null,
         'active',
         draft.asking_price || 0,
         safeText(draft.notes_summary || payload.snippet || 'Import da ricerca online'),
         'online',
-        preview.url || sourceUrl,
+        preview.url || sourceUrl || payload.source_reference || 'da verificare',
         raw.lastInsertRowid,
         now(),
         now()

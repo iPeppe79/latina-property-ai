@@ -529,6 +529,7 @@ async function renderSelectedDemand(id) {
 
 async function searchOnlineProperties() {
   const payload = {
+    provider: el('onlineSearchProvider').value,
     query: el('onlineSearchQuery').value,
     city: el('onlineSearchCity').value,
     property_type: el('onlineSearchType').value,
