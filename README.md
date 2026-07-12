@@ -18,3 +18,4 @@ Apri `http://localhost:3000`.
 - L'integrazione OpenAI è opzionale tramite `OPENAI_API_KEY`.
 - La dashboard integrazioni salva chiavi e parametri locali in SQLite, incluse API GPT/OpenAI e Google Maps.
 - La UI include anche una ricerca online immobili con import assistito e fonte URL.
+- L'import online prova a estrarre automaticamente prezzo, mq e dati utili dalla pagina; OpenAI viene usato solo se configurato.

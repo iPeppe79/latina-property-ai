@@ -67,6 +67,233 @@ function buildSearchTerms(query, city, propertyType, portals = []) {
   return [...parts, ...portalTerms].join(' ');
 }
 
+function decodeHtmlEntities(text) {
+  return String(text || '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, '\'')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
+}
+
+function stripHtmlTags(html) {
+  return decodeHtmlEntities(
+    String(html || '')
+      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<[^>]+>/g, ' ')
+  ).replace(/\s+/g, ' ').trim();
+}
+
+function firstMatch(text, regex) {
+  const match = String(text || '').match(regex);
+  return match ? match[1] : '';
+}
+
+function extractMetaContent(html, selectors) {
+  for (const selector of selectors) {
+    const regex = new RegExp(`<meta[^>]+(?:property|name)=["']${selector}["'][^>]+content=["']([^"']+)["']`, 'i');
+    const match = html.match(regex);
+    if (match) return decodeHtmlEntities(match[1]);
+  }
+  return '';
+}
+
+function parseJsonLdObjects(html) {
+  const matches = [...String(html || '').matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
+  const parsed = [];
+  for (const match of matches) {
+    const raw = match[1].trim();
+    if (!raw) continue;
+    try {
+      const json = JSON.parse(raw);
+      if (Array.isArray(json)) {
+        parsed.push(...json);
+      } else {
+        parsed.push(json);
+      }
+    } catch {
+      // ignore invalid blocks
+    }
+  }
+  return parsed;
+}
+
+function extractNumberFromText(text) {
+  const normalized = String(text || '')
+    .replace(/\s+/g, ' ')
+    .replace(/[€]/g, ' € ')
+    .replace(/,/g, '.');
+  const match = normalized.match(/(?:€|eur|euro)\s*([0-9][0-9.\s]*)/i);
+  if (match) {
+    const value = Number(match[1].replace(/[.\s]/g, ''));
+    if (Number.isFinite(value)) return value;
+  }
+  return null;
+}
+
+function extractSurfaceFromText(text) {
+  const normalized = String(text || '').replace(/,/g, '.');
+  const match = normalized.match(/([0-9]{1,4}(?:\.[0-9]+)?)\s*(?:mq|m²|m2)\b/i);
+  if (!match) return null;
+  const value = Number(match[1]);
+  return Number.isFinite(value) ? value : null;
+}
+
+function inferPropertyType(text) {
+  const normalized = String(text || '').toLowerCase();
+  if (normalized.includes('villa')) return 'villa';
+  if (normalized.includes('attico')) return 'attico';
+  if (normalized.includes('monolocale')) return 'monolocale';
+  if (normalized.includes('bilocale')) return 'bilocale';
+  if (normalized.includes('trilocale')) return 'trilocale';
+  if (normalized.includes('ufficio')) return 'ufficio';
+  if (normalized.includes('capannone')) return 'capannone';
+  return 'appartamento';
+}
+
+function normalizePreviewAddress(text, cityFallback) {
+  const textValue = safeText(text);
+  if (textValue) return textValue;
+  return `${cityFallback || 'Latina'} - da verificare`;
+}
+
+async function fetchUrlPreview(sourceUrl) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    const response = await fetch(sourceUrl, {
+      signal: controller.signal,
+      headers: {
+        'user-agent': 'Mozilla/5.0 (compatible; latina-property-ai/1.0; +http://localhost:3000)',
+        'accept-language': 'it-IT,it;q=0.9,en;q=0.8'
+      }
+    });
+    if (!response.ok) {
+      throw new Error(`Fetch HTTP ${response.status}`);
+    }
+    const html = await response.text();
+    const jsonLd = parseJsonLdObjects(html);
+    const flatJsonLd = jsonLd.find((item) => item && typeof item === 'object' && !Array.isArray(item)) || {};
+    const ogTitle = extractMetaContent(html, ['og:title', 'twitter:title']);
+    const ogDesc = extractMetaContent(html, ['og:description', 'description', 'twitter:description']);
+    const title = safeText(flatJsonLd.name || ogTitle || firstMatch(html, /<title[^>]*>([\s\S]*?)<\/title>/i) || 'Immobile online');
+    const description = safeText(flatJsonLd.description || ogDesc || stripHtmlTags(html).slice(0, 400));
+    const address = safeText(
+      flatJsonLd.address?.streetAddress ||
+      flatJsonLd.address?.addressLocality ||
+      firstMatch(html, /(?:indirizzo|address)[^>]{0,80}>([\s\S]{0,120}?)(?:<\/|<)/i)
+    );
+    const priceFromJsonLd = flatJsonLd.offers?.price || flatJsonLd.price;
+    const priceFromText = extractNumberFromText(description) || extractNumberFromText(stripHtmlTags(html));
+    const surfaceFromJsonLd = flatJsonLd.floorSize?.value || flatJsonLd.areaServed?.value;
+    const surfaceFromText = extractSurfaceFromText(description) || extractSurfaceFromText(stripHtmlTags(html));
+    const propertyType = safeText(flatJsonLd['@type'] || inferPropertyType([title, description].join(' ')));
+    const city = safeText(flatJsonLd.address?.addressLocality || '');
+
+    return {
+      url: response.url || sourceUrl,
+      title,
+      description,
+      address: normalizePreviewAddress(address, city),
+      city,
+      zone: safeText(flatJsonLd.address?.addressRegion || ''),
+      property_type: inferPropertyType([title, description, propertyType].join(' ')),
+      asking_price: Number(priceFromJsonLd || priceFromText || 0),
+      surface_mq: Number(surfaceFromJsonLd || surfaceFromText || 0),
+      rooms: flatJsonLd.numberOfRooms ? Number(flatJsonLd.numberOfRooms) : null,
+      bathrooms: flatJsonLd.numberOfBathroomsTotal ? Number(flatJsonLd.numberOfBathroomsTotal) : null,
+      condition_state: 'da verificare',
+      energy_class: 'da verificare',
+      notes_summary: description.slice(0, 600),
+      source: flatJsonLd.publisher?.name || 'online-search',
+      preview_html: html.slice(0, 8000)
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function analyzePreviewWithOpenAI(preview, payload = {}) {
+  const apiKey = getSettingValue('OpenAI', 'openai_api_key', process.env.OPENAI_API_KEY || '');
+  if (!apiKey) return null;
+
+  const model = getSettingValue('OpenAI', 'openai_model', process.env.OPENAI_MODEL || 'gpt-4.1-mini');
+  const baseUrl = getSettingValue('OpenAI', 'openai_base_url', process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1') || 'https://api.openai.com/v1';
+  const endpoint = `${baseUrl.replace(/\/$/, '')}/chat/completions`;
+  const prompt = [
+    'Estrai dati strutturati da una pagina immobiliare. Ritorna solo JSON valido con chiavi:',
+    'title, address, city, zone, property_type, asking_price, surface_mq, rooms, bathrooms, condition_state, energy_class, notes_summary.',
+    'Se un dato non è certo, usa la stringa "da verificare" o null per i numeri.',
+    `Città target preferita: ${safeText(payload.city || preview.city || 'Latina')}.`,
+    `Testo pagina: ${preview.description || ''}`,
+    `Titolo pagina: ${preview.title || ''}`
+  ].join(' ');
+
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model,
+      temperature: 0.2,
+      messages: [
+        { role: 'system', content: 'Sei un analista immobiliare. Rispondi solo con JSON valido.' },
+        { role: 'user', content: prompt }
+      ]
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`OpenAI HTTP ${response.status}`);
+  }
+  const data = await response.json();
+  const content = data?.choices?.[0]?.message?.content || '';
+  if (!content) return null;
+  try {
+    return JSON.parse(content);
+  } catch {
+    const cleaned = content.replace(/```json|```/g, '').trim();
+    try {
+      return JSON.parse(cleaned);
+    } catch {
+      return null;
+    }
+  }
+}
+
+function buildPropertyDraftFromPreview(preview, aiData = {}, payload = {}) {
+  const merged = {
+    title: payload.title || aiData.title || preview.title,
+    address: payload.address || aiData.address || preview.address,
+    city: payload.city || aiData.city || preview.city || 'Latina',
+    zone: payload.zone || aiData.zone || preview.zone || 'da verificare',
+    property_type: payload.property_type || aiData.property_type || preview.property_type || 'appartamento',
+    asking_price: Number(payload.asking_price || aiData.asking_price || preview.asking_price || 0),
+    surface_mq: Number(payload.surface_mq || aiData.surface_mq || preview.surface_mq || 0),
+    rooms: payload.rooms !== undefined ? payload.rooms : (aiData.rooms !== undefined ? aiData.rooms : preview.rooms),
+    bathrooms: payload.bathrooms !== undefined ? payload.bathrooms : (aiData.bathrooms !== undefined ? aiData.bathrooms : preview.bathrooms),
+    condition_state: payload.condition_state || aiData.condition_state || preview.condition_state || 'da verificare',
+    energy_class: payload.energy_class || aiData.energy_class || preview.energy_class || 'da verificare',
+    notes_summary: payload.notes_summary || aiData.notes_summary || preview.notes_summary || 'Import da pagina online',
+    source_reference: payload.source_reference || preview.url,
+    external_ref: payload.external_ref || preview.url,
+    source_name: payload.source || preview.source || 'online-search'
+  };
+
+  merged.rooms = merged.rooms === '' || merged.rooms === null || merged.rooms === undefined || merged.rooms === 'da verificare'
+    ? null
+    : Number(merged.rooms);
+  merged.bathrooms = merged.bathrooms === '' || merged.bathrooms === null || merged.bathrooms === undefined || merged.bathrooms === 'da verificare'
+    ? null
+    : Number(merged.bathrooms);
+
+  return merged;
+}
+
 async function fetchDuckDuckGoResults(query, limit = 10) {
   const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
   const controller = new AbortController();
@@ -676,93 +903,128 @@ app.post('/api/properties/search-online', async (req, res) => {
 });
 
 app.post('/api/properties/import-online-result', (req, res) => {
-  const payload = req.body || {};
-  const sourceUrl = payload.url || payload.source_url;
-  const title = safeText(payload.title || payload.name || 'Immobile online');
-  if (!sourceUrl) {
-    return res.status(400).json({ ok: false, error: 'URL mancante' });
-  }
+  (async () => {
+    try {
+      const payload = req.body || {};
+      const sourceUrl = payload.url || payload.source_url;
+      if (!sourceUrl) {
+        return res.status(400).json({ ok: false, error: 'URL mancante' });
+      }
 
-  const raw = run(`
-    INSERT INTO raw_records (
-      record_type, source_name, source_identifier, payload_json, imported_at, import_status, verification_status, note
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `, [
-    'online_property',
-    payload.source || 'online-search',
-    sourceUrl,
-    JSON.stringify(payload),
-    now(),
-    'imported',
-    'da verificare',
-    'Bozza da ricerca online'
-  ]);
+      const preview = await fetchUrlPreview(sourceUrl);
+      let aiData = null;
+      try {
+        aiData = await analyzePreviewWithOpenAI(preview, payload);
+      } catch (error) {
+        aiData = null;
+      }
 
-  const city = safeText(payload.city || 'Latina');
-  const propertyType = safeText(payload.property_type || 'da verificare');
-  const sourceReference = sourceUrl;
-  const insert = run(`
-    INSERT INTO properties (
-      external_ref, title, address, city, province, zone, property_type, asking_price, surface_mq,
-      rooms, bathrooms, floor, condition_state, energy_class, status, vacancy_status, seller_motivation,
-      notes_summary, price_per_mq, market_price_per_mq, property_score, vacancy_score, seller_motivation_score,
-      verdict, criticalities, recommended_action, source_type, source_reference, source_record_id, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `, [
-    payload.external_ref || sourceUrl,
-    title,
-    safeText(payload.address || 'da verificare'),
-    city,
-    'LT',
-    safeText(payload.zone || 'da verificare'),
-    propertyType,
-    Number(payload.asking_price || 0),
-    Number(payload.surface_mq || 0),
-    payload.rooms ? Number(payload.rooms) : null,
-    payload.bathrooms ? Number(payload.bathrooms) : null,
-    payload.floor || '',
-    payload.condition_state || 'da verificare',
-    payload.energy_class || 'da verificare',
-    'da verificare',
-    payload.vacancy_status || 'unknown',
-    payload.seller_motivation || 'da verificare',
-    safeText(payload.notes_summary || payload.snippet || 'Ricerca online da verificare'),
-    0,
-    0,
-    0,
-    0,
-    0,
-    'FORSE',
-    JSON.stringify(['Dati online da verificare', 'Prezzo e mq da confermare']),
-    'Raccogli dati mancanti e verifica fonte online',
-    'online',
-    sourceReference,
-    raw.lastInsertRowid,
-    now(),
-    now()
-  ]);
+      const draft = buildPropertyDraftFromPreview(preview, aiData || {}, payload);
 
-  run(`
-    INSERT INTO listings (
-      property_id, portal_name, listing_url, published_at, listing_status, asking_price, notes,
-      source_type, source_reference, source_record_id, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `, [
-    insert.lastInsertRowid,
-    payload.source || 'online-search',
-    sourceUrl,
-    payload.published_at || null,
-    'active',
-    Number(payload.asking_price || 0),
-    safeText(payload.snippet || payload.notes_summary || 'Import da ricerca online'),
-    'online',
-    sourceUrl,
-    raw.lastInsertRowid,
-    now(),
-    now()
-  ]);
+      const raw = run(`
+        INSERT INTO raw_records (
+          record_type, source_name, source_identifier, payload_json, imported_at, import_status, verification_status, note
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        'online_property',
+        draft.source_name || 'online-search',
+        sourceUrl,
+        JSON.stringify({ payload, preview, aiData, draft }),
+        now(),
+        'imported',
+        'da verificare',
+        'Bozza da ricerca online'
+      ]);
 
-  jsonResponse(res, { id: insert.lastInsertRowid });
+      const pricePerMq = draft.asking_price > 0 && draft.surface_mq > 0 ? draft.asking_price / draft.surface_mq : 0;
+      const vacancyScore = scoreVacancy(draft, [], [], []);
+      const sellerMotivationScore = scoreSellerMotivation(draft, [], []);
+      const marketPricePerMq = estimateMarketPricePerMq(draft, []);
+      const propertyScore = scoreProperty({ ...draft, price_per_mq: pricePerMq }, marketPricePerMq, vacancyScore, sellerMotivationScore);
+
+      const insert = run(`
+        INSERT INTO properties (
+          external_ref, title, address, city, province, zone, property_type, asking_price, surface_mq,
+          rooms, bathrooms, floor, condition_state, energy_class, status, vacancy_status, seller_motivation,
+          notes_summary, price_per_mq, market_price_per_mq, property_score, vacancy_score, seller_motivation_score,
+          verdict, criticalities, recommended_action, source_type, source_reference, source_record_id, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        draft.external_ref,
+        draft.title,
+        draft.address,
+        draft.city,
+        'LT',
+        draft.zone,
+        draft.property_type,
+        draft.asking_price,
+        draft.surface_mq,
+        draft.rooms,
+        draft.bathrooms,
+        '',
+        draft.condition_state,
+        draft.energy_class,
+        'da verificare',
+        'unknown',
+        'da verificare',
+        draft.notes_summary,
+        pricePerMq,
+        marketPricePerMq,
+        propertyScore,
+        vacancyScore,
+        sellerMotivationScore,
+        'FORSE',
+        JSON.stringify([
+          'Dati online da verificare',
+          draft.asking_price > 0 ? 'Prezzo individuato automaticamente' : 'Prezzo da confermare',
+          draft.surface_mq > 0 ? 'Superficie individuata automaticamente' : 'Mq da confermare'
+        ]),
+        aiData ? 'Bozza generata con estrazione online e AI opzionale' : 'Bozza generata con estrazione online',
+        'online',
+        draft.source_reference,
+        raw.lastInsertRowid,
+        now(),
+        now()
+      ]);
+
+      run(`
+        INSERT INTO listings (
+          property_id, portal_name, listing_url, published_at, listing_status, asking_price, notes,
+          source_type, source_reference, source_record_id, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        insert.lastInsertRowid,
+        draft.source_name || 'online-search',
+        preview.url || sourceUrl,
+        payload.published_at || null,
+        'active',
+        draft.asking_price || 0,
+        safeText(draft.notes_summary || payload.snippet || 'Import da ricerca online'),
+        'online',
+        preview.url || sourceUrl,
+        raw.lastInsertRowid,
+        now(),
+        now()
+      ]);
+
+      jsonResponse(res, {
+        id: insert.lastInsertRowid,
+        preview: {
+          title: draft.title,
+          address: draft.address,
+          city: draft.city,
+          zone: draft.zone,
+          property_type: draft.property_type,
+          asking_price: draft.asking_price,
+          surface_mq: draft.surface_mq,
+          source_reference: draft.source_reference
+        },
+        ai_used: Boolean(aiData)
+      });
+    } catch (error) {
+      res.status(500).json({ ok: false, error: error.message });
+    }
+  })();
 });
 
 app.put('/api/properties/:id', (req, res) => {

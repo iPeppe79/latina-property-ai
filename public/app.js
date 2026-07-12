@@ -142,6 +142,7 @@ function renderDemandList(demands) {
 
 function renderTasks(tasks) {
   const list = el('taskList');
+  if (!list) return;
   if (!tasks.length) {
     list.innerHTML = '<div class="empty-state">Nessun task CRM presente.</div>';
     return;
@@ -193,7 +194,7 @@ function renderOnlineSearchResults(results) {
         <a href="${result.url}" target="_blank" rel="noreferrer">Apri fonte</a>
       </div>
       <div class="hero-actions">
-        <button data-import-online-result="${result.id}" class="primary">Importa in bozza</button>
+        <button data-import-online-result="${result.id}" class="primary">Analizza e importa</button>
       </div>
     </article>
   `).join('');

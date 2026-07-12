@@ -70,6 +70,7 @@ Web app locale per analizzare il mercato immobiliare di Latina e provincia, con 
 - Sezione integrazioni dedicata alle chiavi GPT/OpenAI, Google Maps, meteo e parametri custom
 - Campi segreti gestibili localmente con visualizzazione on/off
 - Ricerca online immobili dalla UI con bozza importabile
+- Import online che prova a estrarre dati dalla pagina e usa OpenAI in modo opzionale
 - Conservati i flussi esistenti per immobili, domanda, CRM, report e match
 
 ## Verifiche eseguite
