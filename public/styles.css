@@ -545,6 +545,17 @@ button:focus {
   line-height: 1.55;
 }
 
+.callout--compact {
+  margin-top: 0.9rem;
+  padding: 0.85rem 0.95rem;
+  max-width: 64ch;
+}
+
+.callout--compact strong {
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
 .search-results {
   display: grid;
   gap: 0.8rem;

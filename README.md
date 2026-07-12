@@ -21,3 +21,30 @@ Apri `http://localhost:3000`.
 - L'import online prova a estrarre automaticamente prezzo, mq e dati utili dalla pagina; OpenAI viene usato solo se configurato.
 - Idealista è integrato come fonte non ufficiale via search bridge, con fallback sui risultati se la pagina blocca il fetch diretto.
 - La ricerca online supporta ranking geografico per Latina, provincia e zona mare.
+
+## Come si usa
+
+1. Apri `http://localhost:3000`.
+2. Vai su `Ricerca immobili sul web`.
+3. Scegli il motore:
+   - `Web generale` per ricerca ampia
+   - `Idealista non ufficiale` per testare la tua zona su Idealista
+4. Scegli l'area:
+   - `Latina`
+   - `Provincia di Latina`
+   - `Zona mare`
+   - `Personalizzata`
+5. Inserisci una query semplice, per esempio:
+   - `appartamenti vendita`
+   - `ville fronte mare`
+   - `bilocali ristrutturati`
+6. Premi `Cerca online`.
+7. Controlla i risultati ordinati per pertinenza.
+8. Premi `Analizza e importa` sul risultato che ti interessa.
+9. Vai in `Dashboard immobili` per rivedere la bozza, prezzi e valutazione.
+
+## Nota sui dati demo
+
+- I dati iniziali servono solo per mostrare la UI.
+- Non usare i nomi seed come riferimenti reali.
+- Per il lavoro vero, usa solo i risultati della ricerca online o i dati inseriti da te.

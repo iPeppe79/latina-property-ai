@@ -396,21 +396,6 @@ function seedIfEmpty() {
     now()
   ).lastInsertRowid;
 
-  const demoBuyer = entities.run(
-    'buyer',
-    'Marco Bianchi',
-    '3330000002',
-    'bianchi@example.com',
-    null,
-    'whatsapp',
-    'attivo',
-    'seed',
-    'demo-seed',
-    rawId,
-    now(),
-    now()
-  ).lastInsertRowid;
-
   citySet.forEach((item, index) => {
     const p = insertProperty.run(
       `seed-${index + 1}`,
@@ -452,29 +437,6 @@ function seedIfEmpty() {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(p.lastInsertRowid, demoSeller, 'owner', 'seed', 'demo-seed', rawId, now(), now());
   });
-
-  insertDemand.run(
-    demoBuyer,
-    'Marco Bianchi',
-    '3330000002',
-    'bianchi@example.com',
-    JSON.stringify(['Latina', 'Sabaudia', 'Terracina']),
-    120000,
-    220000,
-    60,
-    95,
-    3,
-    JSON.stringify(['appartamento']),
-    'alta',
-    'pre-approvato',
-    'Cerca trilocale in zona servita',
-    'attiva',
-    'seed',
-    'demo-seed',
-    rawId,
-    now(),
-    now()
-  );
 }
 
 function initDb() {
