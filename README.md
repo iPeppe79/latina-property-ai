@@ -17,3 +17,4 @@ Apri `http://localhost:3000`.
 - Il report PDF è generato localmente senza servizi esterni.
 - L'integrazione OpenAI è opzionale tramite `OPENAI_API_KEY`.
 - La dashboard integrazioni salva chiavi e parametri locali in SQLite, incluse API GPT/OpenAI e Google Maps.
+- La UI include anche una ricerca online immobili con import assistito e fonte URL.

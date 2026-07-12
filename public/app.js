@@ -1,6 +1,7 @@
 const state = {
   dashboard: null,
   settings: [],
+  onlineSearchResults: [],
   selectedPropertyId: null,
   selectedDemandId: null,
   showSecrets: false
@@ -162,6 +163,37 @@ function renderTasks(tasks) {
       <p class="small">${task.draft_message}</p>
       <div class="hero-actions">
         <button data-approve-task="${task.id}" ${task.approval_status === 'approved' ? 'disabled' : ''}>Approva</button>
+      </div>
+    </article>
+  `).join('');
+}
+
+function renderOnlineSearchResults(results) {
+  const container = el('onlineSearchResults');
+  if (!results.length) {
+    container.innerHTML = '<div class="empty-state">Nessun risultato ancora. Avvia una ricerca online.</div>';
+    return;
+  }
+
+  container.innerHTML = results.map((result) => `
+    <article class="search-result">
+      <div class="task-line">
+        <div>
+          <h4>${result.title}</h4>
+          <div class="meta">
+            <span>${result.source}</span>
+            <span>${result.city || 'Latina'}</span>
+            <span>${result.property_type || 'da verificare'}</span>
+          </div>
+        </div>
+        <span class="pill warn">da verificare</span>
+      </div>
+      <p class="small">${result.snippet || 'Nessuna descrizione disponibile'}</p>
+      <div class="search-link">
+        <a href="${result.url}" target="_blank" rel="noreferrer">Apri fonte</a>
+      </div>
+      <div class="hero-actions">
+        <button data-import-online-result="${result.id}" class="primary">Importa in bozza</button>
       </div>
     </article>
   `).join('');
@@ -494,6 +526,22 @@ async function renderSelectedDemand(id) {
   renderDemandList(state.dashboard.demands);
 }
 
+async function searchOnlineProperties() {
+  const payload = {
+    query: el('onlineSearchQuery').value,
+    city: el('onlineSearchCity').value,
+    property_type: el('onlineSearchType').value,
+    portals: el('onlineSearchPortals').value,
+    limit: Number(el('onlineSearchLimit').value || 10)
+  };
+  const response = await api('/api/properties/search-online', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+  state.onlineSearchResults = response.results || [];
+  renderOnlineSearchResults(state.onlineSearchResults);
+}
+
 async function refreshDashboard() {
   const dashboard = await api('/api/dashboard');
   state.dashboard = dashboard;
@@ -512,6 +560,7 @@ async function refreshDashboard() {
 async function refreshAll() {
   await refreshDashboard();
   await loadSettings();
+  renderOnlineSearchResults(state.onlineSearchResults);
   if (state.selectedPropertyId) {
     await renderSelectedProperty(state.selectedPropertyId);
   }
@@ -581,6 +630,19 @@ function bindEvents() {
       await refreshAll();
       return;
     }
+
+    const importOnlineButton = event.target.closest('[data-import-online-result]');
+    if (importOnlineButton) {
+      const payload = state.onlineSearchResults.find((item) => String(item.id) === String(importOnlineButton.dataset.importOnlineResult));
+      if (!payload) return;
+      await api('/api/properties/import-online-result', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      await refreshAll();
+      await searchOnlineProperties();
+      return;
+    }
   });
 
   el('refreshBtn').addEventListener('click', refreshAll);
@@ -608,6 +670,7 @@ function bindEvents() {
   el('settingsForm').addEventListener('submit', saveSettings);
   el('toggleSecretsBtn').addEventListener('click', toggleSecretVisibility);
   el('addCustomSettingBtn').addEventListener('click', addCustomSettingRow);
+  el('onlineSearchBtn').addEventListener('click', searchOnlineProperties);
 
   document.querySelectorAll('.nav-item').forEach((button) => {
     button.addEventListener('click', () => {

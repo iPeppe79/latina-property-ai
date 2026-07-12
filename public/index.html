@@ -96,6 +96,28 @@
         </section>
 
         <section class="panel-grid panel-grid--two">
+          <div class="panel" id="onlineSearch">
+            <div class="panel-head">
+              <div>
+                <div class="section-kicker">Online</div>
+                <h3>Ricerca immobili sul web</h3>
+              </div>
+            </div>
+            <p class="section-note">
+              Cerca online immobili su Latina e provincia. I risultati arrivano con fonte URL
+              e possono essere importati come bozze da verificare.
+            </p>
+            <div class="form-grid">
+              <label>Query libera<input id="onlineSearchQuery" placeholder="appartamenti vendita Latina centro" /></label>
+              <label>Città<input id="onlineSearchCity" value="Latina" /></label>
+              <label>Tipologia<input id="onlineSearchType" placeholder="appartamento, villa, attico" /></label>
+              <label>Portali / fonti<input id="onlineSearchPortals" placeholder="immobiliare.it, idealista.it, subito.it" /></label>
+              <label>Limite risultati<input id="onlineSearchLimit" type="number" min="1" max="20" value="10" /></label>
+              <button id="onlineSearchBtn" type="button" class="primary">Cerca online</button>
+            </div>
+            <div class="search-results" id="onlineSearchResults"></div>
+          </div>
+
           <div class="panel" id="propertyEntry">
             <div class="panel-head">
               <div>

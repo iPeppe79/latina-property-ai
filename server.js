@@ -1,6 +1,7 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const { URL } = require('url');
 const {
   initDb,
   db,
@@ -50,6 +51,59 @@ function parseJsonList(value) {
 
 function jsonResponse(res, data) {
   res.json({ ok: true, ...data });
+}
+
+function safeText(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function cleanSearchQuery(query) {
+  return safeText(query).replace(/[^\p{L}\p{N}\s,.-]/gu, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function buildSearchTerms(query, city, propertyType, portals = []) {
+  const parts = [query, city, propertyType].map(cleanSearchQuery).filter(Boolean);
+  const portalTerms = Array.isArray(portals) ? portals.map(cleanSearchQuery).filter(Boolean) : [];
+  return [...parts, ...portalTerms].join(' ');
+}
+
+async function fetchDuckDuckGoResults(query, limit = 10) {
+  const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'user-agent': 'Mozilla/5.0 (compatible; latina-property-ai/1.0; +http://localhost:3000)',
+        'accept-language': 'it-IT,it;q=0.9,en;q=0.8'
+      }
+    });
+    if (!response.ok) {
+      throw new Error(`Search HTTP ${response.status}`);
+    }
+    const html = await response.text();
+    const results = [];
+    const regex = /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
+    let match;
+    while ((match = regex.exec(html)) && results.length < limit) {
+      const resultUrl = match[1];
+      const title = match[2].replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ');
+      const tail = html.slice(match.index + match[0].length);
+      const snippetMatch = tail.match(/<(?:a|div)[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/(?:a|div)>/);
+      const snippet = snippetMatch ? snippetMatch[1].replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ') : '';
+      const parsed = new URL(resultUrl, 'https://duckduckgo.com');
+      results.push({
+        title: safeText(title),
+        url: parsed.href,
+        snippet: safeText(snippet),
+        source: 'DuckDuckGo'
+      });
+    }
+    return results;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function normalizeSettingRow(row) {
@@ -570,6 +624,145 @@ app.post('/api/properties/import-csv', (req, res) => {
   });
 
   jsonResponse(res, { created: created.length, ids: created });
+});
+
+app.post('/api/properties/search-online', async (req, res) => {
+  try {
+    const payload = req.body || {};
+    const query = cleanSearchQuery(payload.query || payload.q || '');
+    const city = cleanSearchQuery(payload.city || 'Latina');
+    const propertyType = cleanSearchQuery(payload.property_type || '');
+    const portals = parseJsonList(payload.portals || []);
+    const limit = Math.max(1, Math.min(20, Number(payload.limit || 10)));
+
+    if (!query && !city && !propertyType) {
+      return res.status(400).json({ ok: false, error: 'query mancante' });
+    }
+
+    const searchTerms = buildSearchTerms(query, city, propertyType, portals);
+    const results = await fetchDuckDuckGoResults(searchTerms, limit);
+    const enriched = results.map((result, index) => ({
+      id: `${Date.now()}-${index}`,
+      ...result,
+      query: searchTerms,
+      city,
+      property_type: propertyType || 'da verificare',
+      portal_hint: portals.length ? portals.join(', ') : 'web',
+      verification_status: 'da verificare'
+    }));
+
+    run(`
+      INSERT INTO raw_records (
+        record_type, source_name, source_identifier, payload_json, imported_at, import_status, verification_status, note
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      'online_search',
+      'duckduckgo',
+      searchTerms,
+      JSON.stringify({ query: searchTerms, results: enriched }),
+      now(),
+      'searched',
+      'da verificare',
+      'Ricerca online immobili'
+    ]);
+
+    jsonResponse(res, {
+      query: searchTerms,
+      results: enriched
+    });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post('/api/properties/import-online-result', (req, res) => {
+  const payload = req.body || {};
+  const sourceUrl = payload.url || payload.source_url;
+  const title = safeText(payload.title || payload.name || 'Immobile online');
+  if (!sourceUrl) {
+    return res.status(400).json({ ok: false, error: 'URL mancante' });
+  }
+
+  const raw = run(`
+    INSERT INTO raw_records (
+      record_type, source_name, source_identifier, payload_json, imported_at, import_status, verification_status, note
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `, [
+    'online_property',
+    payload.source || 'online-search',
+    sourceUrl,
+    JSON.stringify(payload),
+    now(),
+    'imported',
+    'da verificare',
+    'Bozza da ricerca online'
+  ]);
+
+  const city = safeText(payload.city || 'Latina');
+  const propertyType = safeText(payload.property_type || 'da verificare');
+  const sourceReference = sourceUrl;
+  const insert = run(`
+    INSERT INTO properties (
+      external_ref, title, address, city, province, zone, property_type, asking_price, surface_mq,
+      rooms, bathrooms, floor, condition_state, energy_class, status, vacancy_status, seller_motivation,
+      notes_summary, price_per_mq, market_price_per_mq, property_score, vacancy_score, seller_motivation_score,
+      verdict, criticalities, recommended_action, source_type, source_reference, source_record_id, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [
+    payload.external_ref || sourceUrl,
+    title,
+    safeText(payload.address || 'da verificare'),
+    city,
+    'LT',
+    safeText(payload.zone || 'da verificare'),
+    propertyType,
+    Number(payload.asking_price || 0),
+    Number(payload.surface_mq || 0),
+    payload.rooms ? Number(payload.rooms) : null,
+    payload.bathrooms ? Number(payload.bathrooms) : null,
+    payload.floor || '',
+    payload.condition_state || 'da verificare',
+    payload.energy_class || 'da verificare',
+    'da verificare',
+    payload.vacancy_status || 'unknown',
+    payload.seller_motivation || 'da verificare',
+    safeText(payload.notes_summary || payload.snippet || 'Ricerca online da verificare'),
+    0,
+    0,
+    0,
+    0,
+    0,
+    'FORSE',
+    JSON.stringify(['Dati online da verificare', 'Prezzo e mq da confermare']),
+    'Raccogli dati mancanti e verifica fonte online',
+    'online',
+    sourceReference,
+    raw.lastInsertRowid,
+    now(),
+    now()
+  ]);
+
+  run(`
+    INSERT INTO listings (
+      property_id, portal_name, listing_url, published_at, listing_status, asking_price, notes,
+      source_type, source_reference, source_record_id, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [
+    insert.lastInsertRowid,
+    payload.source || 'online-search',
+    sourceUrl,
+    payload.published_at || null,
+    'active',
+    Number(payload.asking_price || 0),
+    safeText(payload.snippet || payload.notes_summary || 'Import da ricerca online'),
+    'online',
+    sourceUrl,
+    raw.lastInsertRowid,
+    now(),
+    now()
+  ]);
+
+  jsonResponse(res, { id: insert.lastInsertRowid });
 });
 
 app.put('/api/properties/:id', (req, res) => {
