@@ -185,6 +185,7 @@ function renderOnlineSearchResults(results) {
             <span>${result.source}</span>
             <span>${result.city || 'Latina'}</span>
             <span>${result.property_type || 'da verificare'}</span>
+            <span>Score ${Math.round(result.relevance_score || 0)}</span>
           </div>
         </div>
         <span class="pill warn">da verificare</span>
@@ -530,6 +531,7 @@ async function renderSelectedDemand(id) {
 async function searchOnlineProperties() {
   const payload = {
     provider: el('onlineSearchProvider').value,
+    area: el('onlineSearchArea').value,
     query: el('onlineSearchQuery').value,
     city: el('onlineSearchCity').value,
     property_type: el('onlineSearchType').value,

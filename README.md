@@ -20,3 +20,4 @@ Apri `http://localhost:3000`.
 - La UI include anche una ricerca online immobili con import assistito e fonte URL.
 - L'import online prova a estrarre automaticamente prezzo, mq e dati utili dalla pagina; OpenAI viene usato solo se configurato.
 - Idealista è integrato come fonte non ufficiale via search bridge, con fallback sui risultati se la pagina blocca il fetch diretto.
+- La ricerca online supporta ranking geografico per Latina, provincia e zona mare.

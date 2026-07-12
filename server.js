@@ -72,14 +72,22 @@ function buildSearchQueryForProvider(payload) {
   const query = cleanSearchQuery(payload.query || payload.q || '');
   const city = cleanSearchQuery(payload.city || 'Latina');
   const propertyType = cleanSearchQuery(payload.property_type || '');
+  const area = cleanSearchQuery(payload.area || payload.zone_scope || 'latina');
   const portals = parseJsonList(payload.portals || []);
+  const geoTerms = {
+    latina: ['latina'],
+    provincia: ['latina', 'sabaudia', 'terracina', 'formia', 'fondi', 'gaeta', 'pontinia', 'sezze', 'priverno', 'fossanova', 'cori'],
+    mare: ['sabaudia', 'terracina', 'san felice circeo', 'gaeta', 'formia', 'san felice', 'circeo']
+  };
+  const areaTokens = geoTerms[area] || normalizeGeoTokens(area);
 
   if (provider === 'idealista') {
-    const searchTerms = buildSearchTerms(query, city, propertyType, portals);
+    const searchTerms = buildSearchTerms(query, city, propertyType, [...portals, ...areaTokens]);
     return {
       provider: 'idealista',
       searchTerms: `site:idealista.it ${searchTerms}`.trim(),
       city,
+      area,
       propertyType,
       portals: portals.length ? portals : ['idealista.it']
     };
@@ -87,8 +95,9 @@ function buildSearchQueryForProvider(payload) {
 
   return {
     provider: 'web',
-    searchTerms: buildSearchTerms(query, city, propertyType, portals),
+    searchTerms: buildSearchTerms(query, city, propertyType, [...portals, ...areaTokens]),
     city,
+    area,
     propertyType,
     portals
   };
@@ -99,6 +108,44 @@ function isIdealistaResult(result) {
     .map((value) => String(value || '').toLowerCase())
     .join(' ');
   return haystack.includes('idealista.it');
+}
+
+function normalizeGeoTokens(value) {
+  return cleanSearchQuery(value)
+    .toLowerCase()
+    .split(/[\s,;/]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function scoreSearchResult(result, criteria = {}) {
+  const haystack = [result.title, result.snippet, result.url, result.portal_hint, result.city, result.property_type]
+    .map((value) => String(value || '').toLowerCase())
+    .join(' ');
+  let score = 0;
+
+  const city = String(criteria.city || '').toLowerCase();
+  const area = String(criteria.area || '').toLowerCase();
+  const propertyType = String(criteria.propertyType || '').toLowerCase();
+  const provider = String(criteria.provider || '').toLowerCase();
+
+  if (city && haystack.includes(city)) score += 45;
+  if (city === 'latina' && haystack.includes('latina')) score += 15;
+  if (area === 'provincia' && (haystack.includes('provincia') || haystack.includes('lt') || haystack.includes('pontinia') || haystack.includes('sabaudia') || haystack.includes('terracina'))) {
+    score += 35;
+  }
+  if (area === 'mare' && (haystack.includes('sabaudia') || haystack.includes('san felice') || haystack.includes('terracina') || haystack.includes('gaeta') || haystack.includes('formia') || haystack.includes('fondi'))) {
+    score += 35;
+  }
+  if (propertyType && haystack.includes(propertyType)) score += 10;
+  if (provider === 'idealista' && haystack.includes('idealista.it')) score += 25;
+  if (String(result.source || '').toLowerCase().includes('duckduckgo')) score += 5;
+  if (haystack.includes('appartament')) score += 6;
+  if (haystack.includes('villa')) score += 4;
+  if (haystack.includes('latina')) score += 10;
+  if (haystack.includes('da verificare')) score -= 4;
+
+  return score;
 }
 
 function decodeHtmlEntities(text) {
@@ -905,10 +952,14 @@ app.post('/api/properties/search-online', async (req, res) => {
       query: built.searchTerms,
       provider: built.provider,
       city: built.city,
+      area: built.area,
       property_type: built.propertyType || 'da verificare',
       portal_hint: built.portals.length ? built.portals.join(', ') : 'web',
       verification_status: 'da verificare'
-    }));
+    })).map((result) => ({
+      ...result,
+      relevance_score: scoreSearchResult(result, built)
+    })).sort((a, b) => b.relevance_score - a.relevance_score);
 
     run(`
       INSERT INTO raw_records (
@@ -918,7 +969,7 @@ app.post('/api/properties/search-online', async (req, res) => {
       'online_search',
       built.provider === 'idealista' ? 'idealista-search' : 'duckduckgo',
       built.searchTerms,
-      JSON.stringify({ query: built.searchTerms, provider: built.provider, results: enriched }),
+      JSON.stringify({ query: built.searchTerms, provider: built.provider, area: built.area, results: enriched }),
       now(),
       'searched',
       'da verificare',
@@ -928,6 +979,7 @@ app.post('/api/properties/search-online', async (req, res) => {
     jsonResponse(res, {
       query: built.searchTerms,
       provider: built.provider,
+      area: built.area,
       results: enriched
     });
   } catch (error) {
