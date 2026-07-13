@@ -282,33 +282,13 @@ function seedDefaultSettings() {
     ['General', 'crm_default_channel', 'Default CRM channel', 'whatsapp', 0, 'Canale predefinito per task'],
     ['General', 'office_email', 'Office email', '', 0, 'Casella operativa locale']
   ].forEach((item) => {
-    settings.run(item[0], item[1], item[2], item[3], item[4], item[5], 'seed', 'demo-seed', now(), now());
+    settings.run(item[0], item[1], item[2], item[3], item[4], item[5], 'system', 'default-settings', now(), now());
   });
-}
-
-function cleanupDemoData() {
-  const demoWhere = `record_type = 'seed' OR source_name = 'demo-seed' OR source_identifier = 'initial-demo'`;
-
-  run(`DELETE FROM property_entity_links WHERE source_type = 'seed' OR source_reference = 'demo-seed'`);
-  run(`DELETE FROM listings WHERE source_type = 'seed' OR source_reference = 'demo-seed'`);
-  run(`DELETE FROM matches WHERE source_type = 'seed' OR source_reference = 'demo-seed'`);
-  run(`DELETE FROM outreach_tasks WHERE source_type = 'seed' OR source_reference = 'demo-seed'`);
-  run(`DELETE FROM notes WHERE source_type = 'seed' OR source_reference = 'demo-seed'`);
-  run(`DELETE FROM property_events WHERE source_type = 'seed' OR source_reference = 'demo-seed'`);
-  run(`DELETE FROM buyer_demands WHERE source_type = 'seed' OR source_reference = 'demo-seed'`);
-  run(`DELETE FROM entities WHERE source_type = 'seed' OR source_reference = 'demo-seed'`);
-  run(`DELETE FROM properties WHERE source_type = 'seed' OR source_reference = 'demo-seed'`);
-  run(`DELETE FROM raw_records WHERE ${demoWhere}`);
-}
-
-function resetDemoData() {
-  cleanupDemoData();
 }
 
 function initDb() {
   execSchema();
   seedDefaultSettings();
-  cleanupDemoData();
 }
 
 module.exports = {
@@ -317,7 +297,6 @@ module.exports = {
   all,
   get,
   initDb,
-  resetDemoData,
   now,
   dbPath
 };

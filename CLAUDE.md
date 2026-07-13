@@ -75,7 +75,6 @@ Web app locale per analizzare il mercato immobiliare di Latina e provincia, con 
 - Import online che prova a estrarre dati dalla pagina e usa OpenAI in modo opzionale
 - Modalità Idealista non ufficiale pronta per test sulla tua zona
 - Filtro area con priorità geografica e score di pertinenza
-- Toggle `Solo reali` e pulsante `Reset demo` per ripulire la vista
 - Conservati i flussi esistenti per immobili, domanda, CRM, report e match
 
 ## Verifiche eseguite

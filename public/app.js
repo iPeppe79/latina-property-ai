@@ -98,15 +98,13 @@ function renderStats(stats) {
 function renderPropertyList(properties) {
   const search = el('propertySearch').value.toLowerCase();
   const verdict = el('propertyVerdictFilter').value;
-  const realOnly = el('realOnlyToggle') ? el('realOnlyToggle').checked : true;
   const filtered = properties.filter((property) => {
     const haystack = [property.title, property.address, property.city, property.zone, property.property_type]
       .join(' ')
       .toLowerCase();
     const matchesSearch = !search || haystack.includes(search);
     const matchesVerdict = !verdict || property.verdict === verdict;
-    const isReal = !realOnly || (property.source_type !== 'seed' && property.source_reference !== 'demo-seed');
-    return matchesSearch && matchesVerdict && isReal;
+    return matchesSearch && matchesVerdict;
   });
 
   el('propertyList').innerHTML = filtered.map((property) => `
@@ -673,16 +671,10 @@ function bindEvents() {
 
   el('propertySearch').addEventListener('input', () => renderPropertyList(state.dashboard?.properties || []));
   el('propertyVerdictFilter').addEventListener('change', () => renderPropertyList(state.dashboard?.properties || []));
-  el('realOnlyToggle').addEventListener('change', () => renderPropertyList(state.dashboard?.properties || []));
   el('settingsForm').addEventListener('submit', saveSettings);
   el('toggleSecretsBtn').addEventListener('click', toggleSecretVisibility);
   el('addCustomSettingBtn').addEventListener('click', addCustomSettingRow);
   el('onlineSearchBtn').addEventListener('click', searchOnlineProperties);
-  el('resetDemoBtn').addEventListener('click', async () => {
-    if (!confirm('Rimuovere eventuali dati demo residui?')) return;
-    await api('/api/admin/reset-demo-data', { method: 'POST', body: JSON.stringify({}) });
-    await refreshAll();
-  });
 
   document.querySelectorAll('.nav-item').forEach((button) => {
     button.addEventListener('click', () => {
