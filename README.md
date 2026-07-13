@@ -42,6 +42,7 @@ Apri `http://localhost:3000`.
 7. Controlla i risultati ordinati per pertinenza.
 8. Premi `Analizza e importa` sul risultato che ti interessa.
 9. Vai in `Dashboard immobili` per rivedere la bozza, prezzi e valutazione.
+10. Se vuoi ripulire eventuali residui demo, usa `Reset demo`.
 
 ## Nota sui dati demo
 

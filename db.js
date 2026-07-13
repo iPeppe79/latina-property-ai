@@ -301,6 +301,10 @@ function cleanupDemoData() {
   run(`DELETE FROM raw_records WHERE ${demoWhere}`);
 }
 
+function resetDemoData() {
+  cleanupDemoData();
+}
+
 function initDb() {
   execSchema();
   seedDefaultSettings();
@@ -313,6 +317,7 @@ module.exports = {
   all,
   get,
   initDb,
+  resetDemoData,
   now,
   dbPath
 };

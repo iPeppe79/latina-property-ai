@@ -7,6 +7,7 @@ const {
   db,
   all,
   get,
+  resetDemoData,
   run,
   now
 } = require('./db');
@@ -694,6 +695,15 @@ app.put('/api/settings', (req, res) => {
     }
   });
   jsonResponse(res, { updated, count: updated.length });
+});
+
+app.post('/api/admin/reset-demo-data', (req, res) => {
+  try {
+    resetDemoData();
+    jsonResponse(res, { reset: true });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
 });
 
 app.get('/api/dashboard', (req, res) => {
